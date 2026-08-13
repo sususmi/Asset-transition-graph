@@ -299,6 +299,7 @@
   .vm-btn{height:32px; padding:0 14px; font-size:13px; font-weight:400;
     background:transparent; color:var(--text-sub); border:1px solid var(--border); border-radius:18px;}
   .vm-btn.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .vm-btn.vm-group{border-color:var(--text); color:var(--text); margin-left:6px;}
 
   /* ===== v52: スマホ幅対応 ===== */
   @media (max-width:640px){
@@ -403,6 +404,7 @@
     <button class="vm-btn" data-mode="pnl">損益のみ</button>
     <button class="vm-btn" data-mode="cumpnl">損益合計推移</button>
     <button class="vm-btn" data-mode="parts">内訳のみ</button>
+    <button class="vm-btn vm-group" id="btn-group" title="タップするたび 入力事項通り → 月ごと → 年ごと と切り替わります">入力事項通り</button>
   </div>
   <div class="legend">
     <span><span class="line-dot" style="background:var(--accent)"></span>資産推移</span>
@@ -601,6 +603,11 @@
   var MA_KEY = 'asset_tracker_ma_v1';
   var maList = [{ period:5, on:true }]; // 移動平均線 [{period:N, on:bool}]
   var MA_COLORS = ['#e8a13a','#7a5cd0','#2fae6b','#d0587a','#3aa0e8']; // MA線の色
+  var GROUP_KEY = 'asset_tracker_group_v1';
+  var groupMode = 'raw'; // 'raw'（入力事項通り）| 'month' | 'year'
+  var GROUP_LABEL = { raw:'入力事項通り', month:'月ごと', year:'年ごと' };
+  var GROUP_ORDER = ['raw','month','year'];
+  var viewRaw = []; // まとめる前の表示中データ（内訳編集はこちらを使う）
   var PART_KEY = 'asset_tracker_parts_v1';
   var partDefs = []; // 資産の内訳 [{id, name, color, on}]  on=グラフに線を出すか
   var PART_COLORS = ['#3aa0e8','#e8a13a','#2fae6b','#d0587a','#7a5cd0','#5cb8b0','#c07a3a','#8a8f2f'];
@@ -832,6 +839,26 @@
     partDefs.forEach(function(pd,i){ if(!pd.id) pd.id='p'+i+'_'+Date.now(); });
   }
   function saveParts(){ try{ localStorage.setItem(PART_KEY, JSON.stringify(partDefs)); }catch(e){} }
+  function loadGroup(){
+    try{ var g=localStorage.getItem(GROUP_KEY); if(g && GROUP_LABEL[g]) groupMode=g; }catch(e){}
+  }
+  function saveGroup(){ try{ localStorage.setItem(GROUP_KEY, groupMode); }catch(e){} }
+  // 月ごと／年ごとにまとめる。
+  // 資産と内訳はストック（残高）なので「その期間の最後の記録」を代表にする。
+  // 損益はフロー（増減）なので期間内を合計する。
+  function groupView(view){
+    if(groupMode==='raw') return view;
+    var cut = (groupMode==='month') ? 7 : 4;
+    var out=[], map={};
+    view.forEach(function(d){
+      var k=d.date.slice(0,cut);
+      if(!map[k]){ map[k]={ date:d.date, value:d.value, pnl:null, parts:d.parts }; out.push(map[k]); }
+      var b=map[k];
+      if(d.date>=b.date){ b.date=d.date; b.value=d.value; b.parts=d.parts; }
+      if(d.pnl!=null) b.pnl=(b.pnl==null?0:b.pnl)+d.pnl;
+    });
+    return out;
+  }
   function newPartId(){ return 'p'+Date.now().toString(36)+Math.floor(Math.random()*1000); }
   // 1件の記録の内訳合計（未入力はスキップ。全部未入力なら null）
   function partsSum(rec){
@@ -952,13 +979,17 @@
   }
 
   function render(){
-    var view = filtered();
+    var rawView = filtered();
+    viewRaw = rawView;
+    var view = groupView(rawView);
     viewData = view;
     // 選択インデックスが範囲外になったらリセット
     if(selectedIdx!=null && selectedIdx>=view.length) selectedIdx=null;
 
     var labels = view.map(function(d){
       var p = d.date.split('-');
+      if(groupMode==='year')  return p[0];
+      if(groupMode==='month') return p[0].slice(2)+'/'+p[1];
       return p[1] + '/' + p[2];
     });
     var years = view.map(function(d){ return d.date.slice(0,4); });
@@ -1046,7 +1077,7 @@
       el.innerHTML='<div class="empty">ドル表示中は内訳を編集できません。円表示に戻してから編集してください。</div>';
       return;
     }
-    var view=viewData||[];
+    var view=viewRaw||[];
     if(!view.length){ el.innerHTML='<div class="empty">表示中の期間に記録がありません。</div>'; return; }
     el.innerHTML='';
     var head=document.createElement('div');
@@ -1182,6 +1213,7 @@
       var cumScales = {
         x:{ ticks:{ color:axisGray, autoSkip:false, maxRotation:0, font:{size:11},
               callback:function(val, idx){
+                if(groupMode==='year') return years[idx];
                 var isYearStart = idx===0 || (years[idx] !== years[idx-1]);
                 var n = labels.length;
                 var step = n<=13 ? 1 : n<=26 ? 2 : Math.ceil(n/13);
@@ -1230,6 +1262,8 @@
       return;
     }
 
+    // 集計単位に応じた比較の呼び名
+    var prevLbl = (groupMode==='year') ? '前年比' : '前月比';
     var showAsset = (viewMode === 'both' || viewMode === 'asset');
     var showPnl   = (viewMode === 'both' || viewMode === 'pnl');
     var showParts = (viewMode === 'both' || viewMode === 'asset' || viewMode === 'parts');
@@ -1287,6 +1321,7 @@
     var scales = {
       x:{ ticks:{ color:axisGray, autoSkip:false, maxRotation:0, font:{size:11},
             callback:function(val, idx){
+              if(groupMode==='year') return years[idx];
               var isYearStart = idx===0 || (years[idx] !== years[idx-1]);
               var n = labels.length;
               var step = n<=13 ? 1 : n<=26 ? 2 : Math.ceil(n/13);
@@ -1478,7 +1513,7 @@
               if(pPrev==null) return ps.name+': '+fmtCur(pvNow, yr);
               var pDiff=pvNow-pPrev;
               var pRate=pPrev!==0?(pDiff/Math.abs(pPrev))*100:0;
-              return ps.name+': '+fmtCur(pvNow, yr)+'  (前月比 '+fmtCurSigned(pDiff, yr)+' / '+pct(pRate)+')';
+              return ps.name+': '+fmtCur(pvNow, yr)+'  ('+prevLbl+' '+fmtCurSigned(pDiff, yr)+' / '+pct(pRate)+')';
             }
             // 移動平均線
             if(/^MA\d+$/.test(dsLabel)){
@@ -1492,7 +1527,7 @@
               if(i===0) return '資産: '+fmtCur(cv, yr);
               var prev=rawValues[i-1], diff=cv-prev;
               var rate=prev!==0?(diff/Math.abs(prev))*100:0;
-              return '資産: '+fmtCur(cv, yr)+'  (前月比 '+fmtCurSigned(diff, yr)+' / '+pct(rate)+')';
+              return '資産: '+fmtCur(cv, yr)+'  ('+prevLbl+' '+fmtCurSigned(diff, yr)+' / '+pct(rate)+')';
             }
             if(rawPnls[i]==null) return '損益: 未入力';
             return '損益: '+fmtCurSigned(rawPnls[i], yr)
@@ -2351,6 +2386,17 @@
     setup('form', 'btn-form-toggle', 'form-panel', '記録を入力', false);
     setup('list', 'btn-list-toggle', 'list', '記録一覧を表示', true);
     setup('pedit', 'btn-pedit-toggle', 'pedit', '内訳を編集', true);
+    var gb=document.getElementById('btn-group');
+    if(gb){
+      gb.textContent = GROUP_LABEL[groupMode];
+      gb.addEventListener('click', function(){
+        var i=GROUP_ORDER.indexOf(groupMode);
+        groupMode = GROUP_ORDER[(i+1) % GROUP_ORDER.length];
+        gb.textContent = GROUP_LABEL[groupMode];
+        selectedIdx=null; // まとめ方が変わると点の位置がずれるので選択を解除
+        saveGroup(); render();
+      });
+    }
   })();
 
   /* ===== 現在資産カードをタップで「最新」に戻す ===== */
@@ -3122,6 +3168,8 @@
   applyColors();
 
   wheelDate.setToday();
+  loadGroup();
+  (function(){ var gb=document.getElementById('btn-group'); if(gb) gb.textContent=GROUP_LABEL[groupMode]; })();
   loadRange();
   load();
 })();
