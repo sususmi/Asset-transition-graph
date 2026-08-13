@@ -68,6 +68,10 @@
   .ma-item .ma-swatch{width:16px; height:16px; border-radius:3px; flex:0 0 auto;}
   .ma-item .ma-unit{font-size:12px; color:var(--text-sub);}
   .count-note{font-size:12px; color:var(--text-muted); text-align:right; margin:4px 0 0;}
+  .save-warn{display:none; border:1px solid var(--minus); border-radius:var(--radius);
+    padding:10px 12px; margin:0 0 14px; font-size:13px; line-height:1.6; color:var(--text);}
+  .save-warn.on{display:block;}
+  .save-warn b{color:var(--minus);}
   .settings-section{margin:20px 0; padding-top:16px; border-top:1px solid var(--border);}
   .add-pos{display:inline-flex; gap:0; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;}
   .add-pos-btn{height:34px; padding:0 10px; font-size:12px; font-weight:400; background:transparent;
@@ -321,6 +325,7 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="save-warn" id="save-warn"></div>
   <div class="head">
     <div>
       <h1>資産推移アプリ</h1>
@@ -517,6 +522,7 @@
   </div>
   <p class="tools-note" id="tools-note">CSVはGoogleスプレッドシートで開けます（新規シート → ファイル → インポート → アップロード）。</p>
   <p class="count-note">記録数: <span id="stat-count">0</span> 件</p>
+  <p class="count-note" id="save-note"></p>
 </div>
 
 <script>
@@ -634,12 +640,73 @@
     return signed(n);
   }
 
+  /* ===== 保存の健全性チェック（v54で追加） =====
+     従来は setItem の失敗を catch で握りつぶしていたため、
+     保存できていないのに成功したように見えていた。書き戻して検証する。 */
+  var saveState = { ok:null, at:null, err:'', probe:null };
+
+  function probeStorage(){
+    try{
+      var k='__probe_'+Date.now();
+      localStorage.setItem(k,'1');
+      var v=localStorage.getItem(k);
+      localStorage.removeItem(k);
+      saveState.probe=(v==='1');
+      if(!saveState.probe) saveState.err='書き戻し不一致';
+    }catch(e){
+      saveState.probe=false;
+      saveState.err=(e && e.name && e.name!=='Error')?e.name:((e&&e.message)?e.message:'例外');
+    }
+    return saveState.probe;
+  }
+
+  function storedCount(){
+    try{
+      var r=localStorage.getItem(KEY);
+      if(!r) return 0;
+      var a=JSON.parse(r);
+      return (a && a.length)?a.length:0;
+    }catch(e){ return -1; }
+  }
+
+  function updateSaveNote(){
+    var warn=document.getElementById('save-warn');
+    var note=document.getElementById('save-note');
+    if(!warn || !note) return;
+    if(saveState.probe===false || saveState.ok===false){
+      warn.className='save-warn on';
+      warn.innerHTML='<b>この端末では記録が保存されません。</b> '
+        +'入力してもアプリを閉じると消えます'
+        +(saveState.err?'（'+saveState.err+'）':'')
+        +'。<br>今入っている内容は、必ず「JSON書き出し」で手元に残してください。';
+      note.textContent='保存: 失敗'+(saveState.err?'（'+saveState.err+'）':'');
+    } else {
+      warn.className='save-warn';
+      var t=saveState.at, hh='';
+      if(t) hh=('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2);
+      note.textContent='保存済み: '+storedCount()+' 件'+(hh?'（'+hh+'）':'');
+    }
+  }
+
   function load(){
+    probeStorage();
     try{ var r = localStorage.getItem(KEY); if(r) data = JSON.parse(r); }catch(e){ data = []; }
     data.sort(function(a,b){ return a.date < b.date ? -1 : 1; });
     render();
+    updateSaveNote();
   }
-  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){} }
+  function save(){
+    try{
+      var s=JSON.stringify(data);
+      localStorage.setItem(KEY, s);
+      if(localStorage.getItem(KEY)!==s) throw new Error('書き戻し不一致');
+      saveState.ok=true; saveState.at=new Date(); saveState.err='';
+    }catch(e){
+      saveState.ok=false;
+      saveState.err=(e && e.name && e.name!=='Error')?e.name:((e&&e.message)?e.message:'例外');
+    }
+    updateSaveNote();
+  }
 
   var rangeFrom = null, rangeTo = null;
   var RANGE_KEY = 'asset_tracker_range_v1';
