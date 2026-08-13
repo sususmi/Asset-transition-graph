@@ -200,6 +200,17 @@
   .chart-box:fullscreen canvas{flex:1; min-height:0;}
   .chart-box:-webkit-full-screen{background:var(--bg); padding:24px;}
 
+  /* Fullscreen APIが使えない環境（iPhone Safari等）向けの擬似全画面 */
+  .chart-box.fs-fake{position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999;
+    width:auto; height:100vh !important; margin:0; padding:24px;
+    background:var(--bg); border:none; border-radius:0;
+    display:flex; flex-direction:column;}
+  @supports (height:100dvh){ .chart-box.fs-fake{height:100dvh !important;} }
+  .chart-box.fs-fake canvas{flex:1; min-height:0;}
+  .chart-box.fs-fake .chart-resize{display:none;}
+  .chart-box.fs-fake .rangeslider.rs-in-fs{margin:12px 0 0; flex:0 0 auto;}
+  body.fs-lock{overflow:hidden;}
+
   /* --- 年月日クイックピッカー --- */
   .quickpick{display:flex; gap:6px; align-items:center; flex-wrap:wrap;}
   .qp-btn{height:32px; padding:0 12px; font-size:13px; font-weight:400;
@@ -304,6 +315,7 @@
 
     /* グラフ */
     .chart-box{padding:10px 8px 16px;}
+    .chart-box.fs-fake{padding:12px 10px;}
   }
 </style>
 </head>
@@ -336,7 +348,7 @@
     <div class="stat"><div class="label" id="stat-current-label">現在資産</div><div class="val" id="stat-current">¥0</div></div>
     <div class="stat stat-compare">
       <div class="cmp-tabs" data-slot="A">
-        <button class="cmp-tab active" data-cmp="last">前回</button>
+        <button class="cmp-tab active" data-cmp="last">前月</button>
         <button class="cmp-tab" data-cmp="yoy">前年</button>
         <button class="cmp-tab" data-cmp="base">元本</button>
         <button class="cmp-tab" data-cmp="first">最初</button>
@@ -346,7 +358,7 @@
     </div>
     <div class="stat stat-compare">
       <div class="cmp-tabs" data-slot="B">
-        <button class="cmp-tab" data-cmp="last">前回</button>
+        <button class="cmp-tab" data-cmp="last">前月</button>
         <button class="cmp-tab active" data-cmp="yoy">前年</button>
         <button class="cmp-tab" data-cmp="base">元本</button>
         <button class="cmp-tab" data-cmp="first">最初</button>
@@ -705,7 +717,7 @@
   function computeCompare(view, idx, mode){
     if(mode === 'last'){
       if(idx >= 1) return { base: view[idx-1].value, note: view[idx-1].date + ' と比較' };
-      return { base: null, note: '前の記録なし' };
+      return { base: null, note: '前月の記録なし' };
     } else if(mode === 'yoy'){
       var yr = view[idx].date.slice(0,4);
       var b = yoyBases[yr];
@@ -725,7 +737,7 @@
     var cum = cumRawData;
     if(mode === 'last'){
       if(idx >= 1) return { base: cum[idx-1], note: view[idx-1].date + ' からの増減' };
-      return { base: null, note: '前の記録なし' };
+      return { base: null, note: '前月の記録なし' };
     } else if(mode === 'yoy'){
       // 前年末（前年の最後の点）の累積損益と比較
       var yr = view[idx].date.slice(0,4);
@@ -1182,7 +1194,7 @@
               if(i===0) return '資産: '+fmtCur(cv, yr);
               var prev=rawValues[i-1], diff=cv-prev;
               var rate=prev!==0?(diff/Math.abs(prev))*100:0;
-              return '資産: '+fmtCur(cv, yr)+'  (前回比 '+fmtCurSigned(diff, yr)+' / '+pct(rate)+')';
+              return '資産: '+fmtCur(cv, yr)+'  (前月比 '+fmtCurSigned(diff, yr)+' / '+pct(rate)+')';
             }
             if(rawPnls[i]==null) return '損益: 未入力';
             return '損益: '+fmtCurSigned(rawPnls[i], yr)
@@ -1738,7 +1750,7 @@
     updateAxisModeUI();
   })();
 
-  /* ===== 比較モード切替（前回比 / 前年比 / 元本比） ===== */
+  /* ===== 比較モード切替（前月比 / 前年比 / 元本比） ===== */
   (function(){
     // 保存済みモードを復元
     try{
@@ -1993,13 +2005,30 @@
     var btn=document.getElementById('btn-fs');
     var slider=document.getElementById('rangeslider');
     var sliderHome=null; // 元の位置を覚えるためのプレースホルダ
-    function isFs(){ return document.fullscreenElement || document.webkitFullscreenElement; }
+    function nativeFs(){ return document.fullscreenElement || document.webkitFullscreenElement; }
+    function isFs(){ return nativeFs() || box.classList.contains('fs-fake'); }
+    var reqFs = box.requestFullscreen || box.webkitRequestFullscreen;
+
+    // Fullscreen APIが無い / 拒否された場合はCSSで全画面を再現する
+    function toggleFake(on){
+      box.classList.toggle('fs-fake', on);
+      document.body.classList.toggle('fs-lock', on);
+      onChange();
+    }
     btn.addEventListener('click', function(){
-      if(isFs()){
-        (document.exitFullscreen||document.webkitExitFullscreen).call(document);
-      } else {
-        (box.requestFullscreen||box.webkitRequestFullscreen).call(box);
+      if(box.classList.contains('fs-fake')){ toggleFake(false); return; }
+      if(nativeFs()){
+        try{ (document.exitFullscreen||document.webkitExitFullscreen).call(document); }catch(e){}
+        return;
       }
+      if(!reqFs){ toggleFake(true); return; }
+      try{
+        var p = reqFs.call(box);
+        if(p && p.catch) p.catch(function(){ toggleFake(true); });
+      }catch(e){ toggleFake(true); }
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key==='Escape' && box.classList.contains('fs-fake')) toggleFake(false);
     });
     function onChange(){
       var fs=isFs();
