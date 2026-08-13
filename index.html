@@ -1,0 +1,2509 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>資産推移アプリ</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f6f5f1; --surface:#ffffff; --surface-2:#faf9f5;
+    --text:#1a1a18; --text-sub:#6b6a64; --text-muted:#9a988f;
+    --border:#e4e2da; --accent:#2a78d6; --plus:#008300; --minus:#d03b3b;
+    --radius:8px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;
+    line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:760px; margin:0 auto; padding:24px 16px 48px;}
+  .head{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px;}
+  h1{font-size:22px; font-weight:600; margin:0 0 4px;}
+  .sub{font-size:13px; color:var(--text-sub); margin:0;}
+  .colorbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:24px;}
+  .opacitybar{display:flex; flex-wrap:wrap; gap:18px; align-items:center; margin:0 0 24px;}
+  .opac{display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--text-sub);}
+  .opac input[type=range]{width:110px; accent-color:var(--accent); cursor:pointer;}
+  .opac .opac-val{min-width:38px; text-align:right; font-variant-numeric:tabular-nums; color:var(--text);}
+  .col{display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 10px 0 8px;
+    background:var(--surface); border:1px solid var(--border); border-radius:18px;
+    font-size:13px; color:var(--text-sub); cursor:pointer; position:relative;}
+  .col-sw{width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.15);}
+  #sw-accent{background:var(--accent);} #sw-plus{background:var(--plus);}
+  #sw-minus{background:var(--minus);} #sw-bg{background:var(--bg);}
+  .col input[type=color]{position:absolute; inset:0; opacity:0; width:100%; height:100%; cursor:pointer; border:none;}
+  .col-reset{height:34px; padding:0 12px; font-size:13px; font-weight:400;
+    background:transparent; color:var(--text-sub); border:1px solid var(--border); border-radius:18px;}
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px; margin-bottom:20px;}
+  .stat{background:var(--surface-2); border-radius:var(--radius); padding:14px 16px;}
+  .stat .label{font-size:12px; color:var(--text-sub); margin-bottom:4px;}
+  .stat .val{font-size:22px; font-weight:600;}
+  .stat .val small{font-size:13px; font-weight:500; color:var(--text-sub); margin-left:4px;}
+  .cmp-tabs{display:flex; gap:3px; margin-bottom:6px; flex-wrap:nowrap;}
+  .cmp-tab{flex:1 1 0; min-width:0; height:24px; padding:0 3px; font-size:10.5px; font-weight:400;
+    background:transparent; color:var(--text-muted); border:1px solid var(--border); border-radius:10px;
+    white-space:nowrap; text-align:center; letter-spacing:-0.02em;}
+  .cmp-tab.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .cmp-note{font-size:11px; color:var(--text-muted); margin-top:4px; min-height:14px;}
+  .yoy-list{display:flex; flex-direction:column; gap:8px; margin-bottom:4px;}
+  .yoy-item{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .yoy-item .yoy-year{display:flex; align-items:center; gap:4px; font-size:13px; color:var(--text-sub);}
+  .yoy-item input.yoy-year-in{width:70px; height:34px; text-align:center;}
+  .yoy-item input.yoy-amt-in{flex:1; min-width:120px; height:34px;}
+  .yoy-item .yoy-del{height:30px; padding:0 10px; font-size:12px; background:transparent;
+    color:var(--text-muted); border:1px solid var(--border); border-radius:var(--radius);}
+  .boost-item input.boost-date-in{width:118px; height:34px; text-align:center;}
+  .boost-item input.boost-amt-in{flex:1; min-width:110px; height:34px;}
+  .boost-toggle-sw{display:inline-flex; align-items:center; gap:6px; cursor:pointer; user-select:none;}
+  .boost-toggle-sw .sw-track{width:38px; height:22px; border-radius:11px; background:var(--border);
+    position:relative; transition:background .15s;}
+  .boost-toggle-sw .sw-track::after{content:""; position:absolute; top:2px; left:2px; width:18px; height:18px;
+    border-radius:50%; background:#fff; transition:left .15s; box-shadow:0 1px 2px rgba(0,0,0,.3);}
+  .boost-toggle-sw.on .sw-track{background:var(--accent);}
+  .boost-toggle-sw.on .sw-track::after{left:18px;}
+  .boost-toggle-sw .sw-label{font-size:12px; color:var(--text-sub);}
+  .ma-item input.ma-period-in{width:80px; height:34px; text-align:center;}
+  .ma-item .ma-swatch{width:16px; height:16px; border-radius:3px; flex:0 0 auto;}
+  .ma-item .ma-unit{font-size:12px; color:var(--text-sub);}
+  .count-note{font-size:12px; color:var(--text-muted); text-align:right; margin:4px 0 0;}
+  .settings-section{margin:20px 0; padding-top:16px; border-top:1px solid var(--border);}
+  .add-pos{display:inline-flex; gap:0; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;}
+  .add-pos-btn{height:34px; padding:0 10px; font-size:12px; font-weight:400; background:transparent;
+    color:var(--text-sub); border:none; border-radius:0;}
+  .add-pos-btn + .add-pos-btn{border-left:1px solid var(--border);}
+  .add-pos-btn.active{background:var(--accent); color:#fff;}
+  .collapsed{display:none !important;}
+
+  /* --- 金額ぼかし --- */
+  body.blur-on #stat-current,
+  body.blur-on #stat-compare-A,
+  body.blur-on #stat-compare-B,
+  body.blur-on .row .amt,
+  body.blur-on .row .pct,
+  body.blur-on .row .pnl,
+  body.blur-on .yoy-amt-in:not(.rate-amt-in),
+  body.blur-on #in-value,
+  body.blur-on #in-pnl{
+    filter:blur(6px); transition:filter .12s;
+  }
+  #btn-blur.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  #btn-usd.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .form{display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:16px; margin:0 0 14px;}
+  .field{flex:1; min-width:110px;}
+  .field label{display:block; font-size:12px; color:var(--text-sub); margin-bottom:5px;}
+  input{width:100%; height:38px; padding:0 10px; font-size:14px; color:var(--text);
+    background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius);
+    font-family:inherit; outline:none;}
+  input:focus,textarea:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(42,120,214,.12);}
+  button{height:38px; padding:0 16px; font-size:14px; font-weight:500; cursor:pointer;
+    background:var(--text); color:var(--bg); border:none; border-radius:var(--radius);
+    font-family:inherit; white-space:nowrap;}
+  button:active{transform:scale(.98);}
+  .bulk-toggle{background:transparent; color:var(--accent); border:1px solid var(--border);
+    font-weight:400; font-size:13px; height:34px; padding:0 14px; border-radius:var(--radius);
+    white-space:nowrap;}
+  .bulk-toggle:hover{background:var(--surface-2);}
+  .settings-group{margin-bottom:14px;}
+  .settings-group-title{font-size:11px; font-weight:600; color:var(--text-muted);
+    letter-spacing:.04em; margin-bottom:7px; text-transform:none;}
+  .settings-toggles{display:flex; flex-wrap:wrap; gap:8px;}
+  .bulk{display:none; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:16px; margin-bottom:14px;}
+  .bulk.open{display:block;}
+  .bulk p{margin:0 0 8px; font-size:13px; color:var(--text-sub);}
+  .bulk code{background:var(--surface-2); padding:1px 5px; border-radius:4px; font-size:12px;}
+  .bulk-help{background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+    padding:10px 12px; margin:0 0 10px;}
+  .bulk-help-title{font-size:12px; font-weight:600; color:var(--text-sub); margin-bottom:6px;}
+  .bulk-help ul{margin:0; padding-left:18px;}
+  .bulk-help li{font-size:12.5px; color:var(--text-sub); margin:3px 0; line-height:1.5;}
+  .bulk-help-note{font-size:11.5px; color:var(--text-muted); margin-top:6px;}
+  textarea{width:100%; min-height:130px; padding:10px; font-size:13px; color:var(--text);
+    background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius);
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; outline:none; resize:vertical; line-height:1.5;}
+  .bulk-actions{display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap;}
+  .bulk-msg{font-size:13px; color:var(--text-sub);}
+  .range{display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .presets{display:flex; gap:6px; flex-wrap:wrap;}
+  .preset{height:32px; padding:0 12px; font-size:13px; font-weight:400;
+    background:transparent; color:var(--text-sub); border:1px solid var(--border);}
+  .preset.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .range-dates{display:flex; align-items:center; gap:6px;}
+  .range-dates input{width:145px; height:32px; font-size:13px;}
+  .tilde{color:var(--text-muted); font-size:13px;}
+  .legend{display:flex; flex-wrap:wrap; gap:16px; margin-bottom:8px; font-size:12px; color:var(--text-sub);}
+  .axismode{display:flex; align-items:center; gap:6px; margin-bottom:14px; flex-wrap:wrap;}
+  .axismode-label{font-size:12px; color:var(--text-muted);}
+  .axm-btn{height:28px; padding:0 12px; font-size:12px; font-weight:400; background:transparent;
+    color:var(--text-sub); border:1px solid var(--border); border-radius:14px; cursor:pointer;}
+  .axm-btn.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .axm-btn:disabled{opacity:.4; cursor:default;}
+  .legend span{display:flex; align-items:center; gap:5px;}
+  .dot{width:10px; height:10px; border-radius:2px;}
+  .line-dot{width:16px; height:3px; border-radius:2px;}
+  .chart-box{position:relative; width:100%; height:var(--chart-h,380px); margin-bottom:24px;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:12px 12px 18px; min-height:220px;}
+  .chart-resize{position:absolute; left:0; right:0; bottom:0; height:16px; cursor:ns-resize;
+    display:flex; align-items:center; justify-content:center; z-index:2;
+    border-bottom-left-radius:12px; border-bottom-right-radius:12px;}
+  .chart-resize::before{content:""; width:40px; height:4px; border-radius:2px;
+    background:var(--border);}
+  .chart-resize:hover::before{background:var(--text-muted);}
+  .chart-box.resizing{user-select:none;}
+  #chart{outline:none;}
+  #chart:focus, #chart:focus-visible{outline:none; box-shadow:none;}
+  .chart-box:fullscreen .chart-resize{display:none;}
+  .list{display:flex; flex-direction:column; gap:4px;}
+  .row{display:flex; align-items:center; justify-content:space-between;
+    padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px;}
+  .row .date{color:var(--text-sub);}
+  .row .right{display:flex; align-items:center; gap:12px;}
+  .row .amt{font-weight:600;}
+  .row .pct{min-width:66px; text-align:right; font-size:12px;}
+  .row .pnl{min-width:80px; text-align:right;}
+  .del,.edit{height:26px; padding:0 8px; font-size:12px; background:transparent;
+    color:var(--text-muted); border:1px solid var(--border);}
+  .edit{color:var(--accent);}
+  .row.editing{gap:8px; flex-wrap:wrap;}
+  .edit-fields{gap:6px; flex-wrap:wrap;}
+  .edit-fields input{width:110px; height:30px; font-size:13px;}
+  .edit-group{display:inline-flex; align-items:stretch;}
+  .sign-btn{width:30px; height:30px; font-size:16px; font-weight:600; line-height:1;
+    background:var(--surface-2); color:var(--text-sub); border:1px solid var(--border);
+    border-right:none; border-radius:var(--radius) 0 0 var(--radius); cursor:pointer;}
+  .sign-btn:hover{color:var(--accent); border-color:var(--accent);}
+  .edit-group input.no-spin{border-radius:0 var(--radius) var(--radius) 0;}
+  /* 数値スピナー（上下矢印）を消す */
+  input.no-spin::-webkit-outer-spin-button,
+  input.no-spin::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+  input.no-spin{-moz-appearance:textfield; appearance:textfield;}
+  .save-edit{height:30px; padding:0 12px; font-size:12px; background:var(--accent); color:#fff; border:none;}
+  .cancel-edit{height:30px; padding:0 10px; font-size:12px; background:transparent; color:var(--text-sub); border:1px solid var(--border);}
+  .empty{text-align:center; color:var(--text-muted); font-size:13px; padding:16px;}
+  .tools{display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:16px;}
+  .tools button{background:transparent; color:var(--text-sub); border:1px solid var(--border);
+    font-weight:400; font-size:13px;}
+  .tools-note{font-size:12px; color:var(--text-muted); text-align:right; margin:8px 0 0;}
+
+  /* --- 全画面ボタン --- */
+  .chart-fs{position:absolute; top:8px; right:8px; z-index:2; height:30px; padding:0 10px;
+    font-size:12px; font-weight:500; background:var(--surface-2); color:var(--text-sub);
+    border:1px solid var(--border); border-radius:var(--radius);}
+  .chart-fs:hover{color:var(--text);}
+  .chart-box:fullscreen{background:var(--bg); border:none; border-radius:0; padding:24px;
+    display:flex; flex-direction:column; height:100vh !important;}
+  .chart-box:fullscreen canvas{flex:1; min-height:0;}
+  .chart-box:-webkit-full-screen{background:var(--bg); padding:24px;}
+
+  /* --- 年月日クイックピッカー --- */
+  .quickpick{display:flex; gap:6px; align-items:center; flex-wrap:wrap;}
+  .qp-btn{height:32px; padding:0 12px; font-size:13px; font-weight:400;
+    background:transparent; color:var(--text-sub); border:1px solid var(--border); border-radius:var(--radius);}
+  .qp-btn.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .qp-panel{display:none; margin-bottom:16px; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:16px;}
+  .qp-panel.open{display:block;}
+
+  /* --- 期間スライダー --- */
+  .rangeslider{margin:0 0 24px; padding:14px 16px 10px; background:var(--surface);
+    border:1px solid var(--border); border-radius:12px;}
+  .rs-labels{display:flex; justify-content:space-between; align-items:center;
+    font-size:13px; color:var(--text-sub); margin-bottom:12px; gap:8px;}
+  .rs-labels #rs-from-label, .rs-labels #rs-to-label{font-weight:600; color:var(--text); white-space:nowrap;}
+  .rs-hint{font-size:11px; color:var(--text-muted); font-weight:400;}
+  .rs-track{position:relative; height:8px; margin:14px 12px; background:var(--surface-2);
+    border:1px solid var(--border); border-radius:6px;}
+  .rs-fill{position:absolute; top:0; bottom:0; background:var(--accent); opacity:.28; border-radius:6px;}
+  .rs-handle{position:absolute; top:50%; width:22px; height:22px; margin-left:-11px;
+    transform:translateY(-50%); background:var(--accent); border:2px solid var(--bg);
+    border-radius:50%; cursor:grab; box-shadow:0 1px 4px rgba(0,0,0,.25); touch-action:none; z-index:2;}
+  .rs-handle:active{cursor:grabbing;}
+  .rs-handle:focus{outline:none; box-shadow:0 0 0 5px rgba(42,120,214,.35); width:26px; height:26px; margin-left:-13px;}
+  .rs-handle.rs-active{box-shadow:0 0 0 5px rgba(42,120,214,.35);}
+  .rs-actions{display:flex; justify-content:flex-end; margin-top:4px;}
+  .rs-reset{height:30px; padding:0 12px; font-size:12px; background:transparent;
+    color:var(--text-sub); border:1px solid var(--border); border-radius:var(--radius);}
+  /* 全画面のグラフ内に入れたスライダー */
+  .chart-box:fullscreen .rangeslider.rs-in-fs{margin:12px 0 0; flex:0 0 auto;}
+  .chart-box:-webkit-full-screen .rangeslider.rs-in-fs{margin:12px 0 0;}
+
+  /* --- ホイール日付ピッカー --- */
+  .wheeldate{display:inline-flex; gap:6px; align-items:stretch;}
+  .wd-col{display:flex; align-items:baseline; gap:2px; padding:6px 10px; cursor:ns-resize;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius);
+    user-select:none; min-width:48px; justify-content:center; transition:border-color .1s;}
+  .wd-col:hover{border-color:var(--accent);}
+  .wd-col.active{border-color:var(--accent); box-shadow:0 0 0 3px rgba(42,120,214,.12);}
+  .wd-val{font-size:17px; font-weight:600; color:var(--text); font-variant-numeric:tabular-nums;}
+  .wd-unit{font-size:11px; color:var(--text-muted);}
+  .qp-side{display:flex; gap:20px; flex-wrap:wrap;}
+  .qp-col{flex:1; min-width:150px;}
+  .qp-col > .qp-label{font-size:12px; color:var(--text-sub); margin-bottom:8px; font-weight:600;}
+  .qp-ymd{display:flex; gap:8px;}
+  .qp-ymd > div{flex:1;}
+  .qp-ymd .qp-sub{font-size:11px; color:var(--text-muted); margin-bottom:4px;}
+  .qp-ymd select{width:100%; height:36px; padding:0 6px; font-size:14px; color:var(--text);
+    background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius);
+    font-family:inherit; outline:none; cursor:pointer;}
+  .qp-ymd select:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(42,120,214,.12);}
+  .qp-actions{display:flex; gap:8px; align-items:center; margin-top:14px; flex-wrap:wrap;}
+  .qp-apply{height:34px; padding:0 16px; font-size:13px; background:var(--accent); color:#fff; border:none;}
+  .qp-clear{height:34px; padding:0 12px; font-size:13px; background:transparent; color:var(--text-sub); border:1px solid var(--border);}
+  .qp-hint{font-size:12px; color:var(--text-muted);}
+
+  /* --- 表示切替（両方 / 資産のみ / 損益のみ） --- */  .viewmode{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;}
+  .vm-btn{height:32px; padding:0 14px; font-size:13px; font-weight:400;
+    background:transparent; color:var(--text-sub); border:1px solid var(--border); border-radius:18px;}
+  .vm-btn.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1>資産推移アプリ</h1>
+      <p class="sub">日付・資産額・損益を記録。折れ線が資産推移、棒が損益です。データはこのブラウザに保存されます。</p>
+    </div>
+  </div>
+
+  <div class="colorbar">
+    <label class="col"><span class="col-sw" id="sw-accent"></span>資産推移<input type="color" id="col-accent" value="#2a78d6"></label>
+    <label class="col"><span class="col-sw" id="sw-plus"></span>損益＋<input type="color" id="col-plus" value="#008300"></label>
+    <label class="col"><span class="col-sw" id="sw-minus"></span>損益−<input type="color" id="col-minus" value="#d03b3b"></label>
+    <label class="col"><span class="col-sw" id="sw-bg"></span>背景<input type="color" id="col-bg" value="#f6f5f1"></label>
+    <button class="col-reset" id="btn-color-reset">リセット</button>
+    <button class="col-reset" id="btn-usd">$ ドル表示</button>
+    <button class="col-reset" id="btn-blur">🙈 金額をぼかす</button>
+  </div>
+  <p id="usd-note" style="display:none; font-size:12px; color:var(--minus); margin:0 0 16px;"></p>
+
+  <div class="opacitybar">
+    <label class="opac"><span>資産推移の塗り</span><input type="range" id="opac-asset" min="0" max="1" step="0.01" value="0.08"><span class="opac-val" id="opac-asset-val">8%</span></label>
+    <label class="opac"><span>損益の棒</span><input type="range" id="opac-pnl" min="0" max="1" step="0.01" value="1"><span class="opac-val" id="opac-pnl-val">100%</span></label>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="label" id="stat-current-label">現在資産</div><div class="val" id="stat-current">¥0</div></div>
+    <div class="stat stat-compare">
+      <div class="cmp-tabs" data-slot="A">
+        <button class="cmp-tab active" data-cmp="last">前回</button>
+        <button class="cmp-tab" data-cmp="yoy">前年</button>
+        <button class="cmp-tab" data-cmp="base">元本</button>
+        <button class="cmp-tab" data-cmp="first">最初</button>
+      </div>
+      <div class="val" id="stat-compare-A">—</div>
+      <div class="cmp-note" id="stat-compare-note-A"></div>
+    </div>
+    <div class="stat stat-compare">
+      <div class="cmp-tabs" data-slot="B">
+        <button class="cmp-tab" data-cmp="last">前回</button>
+        <button class="cmp-tab active" data-cmp="yoy">前年</button>
+        <button class="cmp-tab" data-cmp="base">元本</button>
+        <button class="cmp-tab" data-cmp="first">最初</button>
+      </div>
+      <div class="val" id="stat-compare-B">—</div>
+      <div class="cmp-note" id="stat-compare-note-B"></div>
+    </div>
+  </div>
+
+  <div class="viewmode" id="viewmode">
+    <button class="vm-btn active" data-mode="both">両方表示</button>
+    <button class="vm-btn" data-mode="asset">資産推移のみ</button>
+    <button class="vm-btn" data-mode="pnl">損益のみ</button>
+    <button class="vm-btn" data-mode="cumpnl">損益合計推移</button>
+  </div>
+  <div class="legend">
+    <span><span class="line-dot" style="background:var(--accent)"></span>資産推移</span>
+    <span><span class="dot" style="background:var(--plus)"></span>損益 プラス</span>
+    <span><span class="dot" style="background:var(--minus)"></span>損益 マイナス</span>
+  </div>
+  <div class="axismode" id="axismode">
+    <span class="axismode-label">ゼロ基準：</span>
+    <button class="axm-btn active" data-axm="fit" title="損益の棒を見やすい大きさに拡大して表示します（資産とは別の縮尺）">損益拡大</button>
+    <button class="axm-btn" data-axm="real" title="資産の増減と損益を同じ縮尺で表示します（同じ1円が同じ高さ）">同じ縮尺</button>
+  </div>
+  <div class="chart-box" id="chart-box">
+    <button class="chart-fs" id="btn-fs" title="全画面表示">⛶ 全画面</button>
+    <canvas id="chart" tabindex="0" role="img" aria-label="資産推移の折れ線と損益の棒を重ねたグラフ（クリックして矢印キーやA/Dで点を移動）">資産と損益データ</canvas>
+    <div class="chart-resize" id="chart-resize" title="ドラッグで高さを変更"></div>
+  </div>
+
+  <div class="rangeslider" id="rangeslider">
+    <div class="rs-labels">
+      <span id="rs-from-label">—</span>
+      <span class="rs-hint">つまみをドラッグで期間を選択</span>
+      <span id="rs-to-label">—</span>
+    </div>
+    <div class="rs-track" id="rs-track">
+      <div class="rs-fill" id="rs-fill"></div>
+      <div class="rs-handle" id="rs-handle-from" tabindex="0" role="slider" aria-label="開始"></div>
+      <div class="rs-handle" id="rs-handle-to" tabindex="0" role="slider" aria-label="終了"></div>
+    </div>
+    <div class="rs-actions">
+      <button class="rs-reset" id="rs-reset">全期間に戻す</button>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <div class="settings-group">
+      <div class="settings-group-title">データ入力</div>
+      <div class="settings-toggles">
+        <button class="bulk-toggle" id="btn-form-toggle">▾ 記録を入力</button>
+        <button class="bulk-toggle" id="btn-bulk-toggle">▸ 過去データを一括貼り付け</button>
+      </div>
+    </div>
+    <div class="form" id="form-panel">
+      <div class="field"><label>日付</label>
+        <div class="wheeldate" id="wheeldate">
+          <div class="wd-col" data-wd="y" title="クリックしてホイールで選択"><div class="wd-val" id="wd-y">2025</div><div class="wd-unit">年</div></div>
+          <div class="wd-col" data-wd="m"><div class="wd-val" id="wd-m">1</div><div class="wd-unit">月</div></div>
+          <div class="wd-col" data-wd="d"><div class="wd-val" id="wd-d">1</div><div class="wd-unit">日</div></div>
+          <input type="hidden" id="in-date">
+        </div>
+      </div>
+      <div class="field"><label id="lbl-value">資産額 (円)</label><input type="number" id="in-value" placeholder="1000000"></div>
+      <div class="field"><label id="lbl-pnl">損益 (円)</label><input type="number" id="in-pnl" placeholder="任意"></div>
+      <button id="btn-add">＋ 追加</button>
+    </div>
+    <div class="bulk" id="bulk">
+      <p>1行に1件。<code>日付,資産額,損益</code> の順（損益は省略可）。区切りはカンマ / タブ / スペースどれでもOK。</p>
+      <div class="bulk-help">
+        <div class="bulk-help-title">日付の書き方</div>
+        <ul>
+          <li><b>通常</b>：<code>2024/1/31</code>・<code>2024-01-31</code>・区切りなし <code>20240131</code></li>
+          <li><b>年は下2桁でもOK</b>（2000年代）：<code>24/1/31</code>・<code>240131</code> → 2024-01-31</li>
+          <li><b>月末コマンド <code>L</code></b>：その月の最終日。<code>241L</code> → 2024-01-31、<code>2412L</code> → 2024-12-31</li>
+          <li><b>月初コマンド <code>F</code></b>：その月の1日。<code>241F</code> → 2024-01-01、<code>2412F</code> → 2024-12-01</li>
+        </ul>
+        <div class="bulk-help-note">※ L/F は月が1桁でも2桁でも同じ書き方（年2桁＋月、または年4桁＋月）。<code>202412L</code> のように4桁年でも可。</div>
+      </div>
+      <textarea id="bulk-text" placeholder="241F, 1000000, 0&#10;24/2/1, 1050000, 50000&#10;240301, 1030000&#10;2412L	1120000	90000"></textarea>
+      <div class="bulk-actions">
+        <button id="btn-bulk-add">取り込む</button>
+        <span class="bulk-msg" id="bulk-msg"></span>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-group-title">グラフの表示</div>
+      <div class="settings-toggles">
+        <button class="bulk-toggle" id="btn-ma-toggle">▸ 移動平均線（MA）</button>
+        <button class="bulk-toggle" id="btn-boost-toggle">▸ 過去の資産を上乗せ</button>
+      </div>
+    </div>
+    <div class="bulk" id="ma-panel">
+      <p>資産推移に移動平均線を重ねて表示します。期間（本数）を指定でき、いくつでも追加できます。各行のスイッチでオン／オフを切り替えられます。</p>
+      <div class="yoy-list" id="ma-list"></div>
+      <div class="bulk-actions">
+        <button id="btn-ma-add">＋ MAを追加</button>
+        <span class="bulk-msg" id="ma-msg"></span>
+      </div>
+    </div>
+    <div class="bulk" id="boost-panel">
+      <p>指定した日付<b>以下（その日を含む）</b>の全記録の資産額に、上乗せ額を加算して表示します（元データは変更しません）。各行のスイッチでオン／オフを切り替えられ、いくつでも登録できます。</p>
+      <div class="yoy-list" id="boost-list"></div>
+      <div class="bulk-actions">
+        <button id="btn-boost-add">＋ 上乗せを追加</button>
+        <span class="add-pos"><button class="add-pos-btn active" data-list="boost" data-pos="top">上に追加</button><button class="add-pos-btn" data-list="boost" data-pos="bottom">下に追加</button></span>
+        <span class="bulk-msg" id="boost-msg"></span>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-group-title">比較の基準・換算</div>
+      <div class="settings-toggles">
+        <button class="bulk-toggle" id="btn-principal-toggle">▸ 元本比の基準額</button>
+        <button class="bulk-toggle" id="btn-yoy-toggle">▸ 前年比の基準額</button>
+        <button class="bulk-toggle" id="btn-rate-toggle">▸ ドル円レート</button>
+      </div>
+    </div>
+    <div class="bulk" id="principal-panel">
+      <p>元本比カードは、選択中の時点の資産額を<b>この元手</b>と比べます。投資した元本の合計などを入力してください。</p>
+      <div class="yoy-item">
+        <input type="number" class="yoy-amt-in" id="in-principal" placeholder="元手（円）" inputmode="numeric">
+      </div>
+    </div>
+    <div class="bulk" id="yoy-panel">
+      <p>年ごとに基準額を入力できます。前年比カードは、選択中の時点の<b>その年の基準額</b>と現在額を比べます。空欄の年は「—」になります。</p>
+      <div class="yoy-list" id="yoy-list"></div>
+      <div class="bulk-actions">
+        <button id="btn-yoy-add">＋ 年を追加</button>
+        <span class="add-pos"><button class="add-pos-btn active" data-list="yoy" data-pos="top">上に追加</button><button class="add-pos-btn" data-list="yoy" data-pos="bottom">下に追加</button></span>
+        <span class="bulk-msg" id="yoy-msg"></span>
+      </div>
+    </div>
+    <div class="bulk" id="rate-panel">
+      <p>ドル表示のときに使う<b>ドル円レート</b>を年ごとに入力します。各金額は、その日付の年のレートで割ってドル換算されます。レート未設定の年は円のまま表示されます。</p>
+      <div class="yoy-list" id="rate-list"></div>
+      <div class="bulk-actions">
+        <button id="btn-rate-add">＋ 年を追加</button>
+        <span class="add-pos"><button class="add-pos-btn active" data-list="rate" data-pos="top">上に追加</button><button class="add-pos-btn" data-list="rate" data-pos="bottom">下に追加</button></span>
+        <span class="bulk-msg" id="rate-msg"></span>
+      </div>
+    </div>
+  </div>
+
+  <button class="bulk-toggle" id="btn-list-toggle" style="margin-top:8px;">▸ 記録一覧を表示</button>
+  <div class="list collapsed" id="list"></div>
+
+  <div class="tools">
+    <button id="btn-png">グラフを画像保存</button>
+    <button id="btn-export">CSV書き出し</button>
+    <button id="btn-backup">バックアップ保存</button>
+    <button id="btn-restore">バックアップ読込</button>
+    <input type="file" id="restore-file" accept=".json" style="display:none">
+  </div>
+  <p class="tools-note" id="tools-note">CSVはGoogleスプレッドシートで開けます（新規シート → ファイル → インポート → アップロード）。</p>
+  <p class="count-note">記録数: <span id="stat-count">0</span> 件</p>
+</div>
+
+<script>
+(function(){
+  var KEY = 'asset_tracker_local_v1';
+  var COLOR_KEY = 'asset_tracker_colors_v1';
+  var OPACITY_KEY = 'asset_tracker_opacity_v1';
+  var opacity = { asset:0.08, pnl:1.0 }; // 資産推移の塗り・損益棒の不透明度
+  var YOY_KEY = 'asset_tracker_yoy_bases_v1';
+  var CMP_KEY = 'asset_tracker_cmp_modes_v1';
+  var yoyBases = {};        // { '2023': 1000000, '2024': 1200000 } 年ごとの基準額
+  var PRINCIPAL_KEY = 'asset_tracker_principal_v1';
+  var principalBase = null; // 元本比の基準額（元手）
+  var compareModes = { A:'last', B:'yoy' }; // 各カードの比較モード 'last' | 'yoy' | 'base'
+  var blurOn = false; // 金額ぼかし状態
+  var usdOn = false;  // ドル表示状態
+  var USD_KEY = 'asset_tracker_usd_on_v1';
+  var USDRATE_KEY = 'asset_tracker_usd_rates_v1';
+  var usdRates = {};  // { '2024': 150.5, '2025': 145.0 } 年ごとのドル円レート
+  var ADDPOS_KEY = 'asset_tracker_addpos_v1';
+  var addPos = { yoy:'top', rate:'top', boost:'top' }; // 新規行を上/下どちらに足すか
+  var BOOST_KEY = 'asset_tracker_boosts_v1';
+  var boosts = []; // 上乗せ [{date:'2024-05-01', amount:500000, on:true}] 指定日より前の記録に加算
+  var MA_KEY = 'asset_tracker_ma_v1';
+  var maList = [{ period:5, on:true }]; // 移動平均線 [{period:N, on:bool}]
+  var MA_COLORS = ['#e8a13a','#7a5cd0','#2fae6b','#d0587a','#3aa0e8']; // MA線の色
+  var data = [];
+  var chart;
+
+  var DEFAULTS = { accent:'#2a78d6', plus:'#008300', minus:'#d03b3b', bg:'#f6f5f1' };
+  var colors = Object.assign({}, DEFAULTS);
+  var ACCENT, PLUS, MINUS, BG;
+
+  function luminance(hex){
+    var h=hex.replace('#',''); if(h.length===3){ h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2]; }
+    var r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+    return (0.299*r + 0.587*g + 0.114*b)/255;
+  }
+  function shade(hex, amt){
+    var h=hex.replace('#',''); if(h.length===3){ h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2]; }
+    var r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+    r=Math.max(0,Math.min(255,Math.round(r+amt)));
+    g=Math.max(0,Math.min(255,Math.round(g+amt)));
+    b=Math.max(0,Math.min(255,Math.round(b+amt)));
+    return '#'+[r,g,b].map(function(x){ return ('0'+x.toString(16)).slice(-2); }).join('');
+  }
+
+  function applyColors(){
+    ACCENT=colors.accent; PLUS=colors.plus; MINUS=colors.minus; BG=colors.bg;
+    var root=document.documentElement.style;
+    var dark = luminance(colors.bg) < 0.5;
+    root.setProperty('--accent', colors.accent);
+    root.setProperty('--plus', colors.plus);
+    root.setProperty('--minus', colors.minus);
+    root.setProperty('--bg', colors.bg);
+    root.setProperty('--surface', dark ? shade(colors.bg, 22) : shade(colors.bg, 14));
+    root.setProperty('--surface-2', dark ? shade(colors.bg, 14) : shade(colors.bg, 6));
+    root.setProperty('--border', dark ? shade(colors.bg, 40) : shade(colors.bg, -22));
+    root.setProperty('--text', dark ? '#f2f1ec' : '#1a1a18');
+    root.setProperty('--text-sub', dark ? '#b0aea5' : '#6b6a64');
+    root.setProperty('--text-muted', dark ? '#7f7e77' : '#9a988f');
+    // sync the picker inputs
+    ['accent','plus','minus','bg'].forEach(function(k){
+      var el=document.getElementById('col-'+k); if(el) el.value=colors[k];
+    });
+    try{ localStorage.setItem(COLOR_KEY, JSON.stringify(colors)); }catch(e){}
+  }
+
+  function yen(n){ return (n<0?'-':'') + '¥' + Math.abs(Math.round(n)).toLocaleString('ja-JP'); }
+  function signed(n){ return (n>0?'+':n<0?'-':'') + '¥' + Math.abs(Math.round(n)).toLocaleString('ja-JP'); }
+  function pct(n){ return (n>0?'+':n<0?'-':'') + Math.abs(n).toFixed(2) + '%'; }
+
+  // ==== ドル換算 ====
+  function rateForYear(year){
+    var r = usdRates[String(year)];
+    return (r!=null && !isNaN(r) && r>0) ? r : null;
+  }
+  // 円→ドル（レートが無ければnull）
+  function toUSD(n, year){
+    var r = rateForYear(year);
+    if(r==null) return null;
+    return n / r;
+  }
+  // ドル→円（レートが無ければnull）
+  function toYEN(usdVal, year){
+    var r = rateForYear(year);
+    if(r==null) return null;
+    return usdVal * r;
+  }
+  // 入力欄のラベル・プレースホルダを通貨に合わせて更新
+  function updateInputCurrencyLabels(){
+    var lv=document.getElementById('lbl-value');
+    var lp=document.getElementById('lbl-pnl');
+    var iv=document.getElementById('in-value');
+    if(usdOn){
+      if(lv) lv.textContent='資産額 ($)';
+      if(lp) lp.textContent='損益 ($)';
+      if(iv) iv.placeholder='10000';
+    } else {
+      if(lv) lv.textContent='資産額 (円)';
+      if(lp) lp.textContent='損益 (円)';
+      if(iv) iv.placeholder='1000000';
+    }
+  }
+  function usd(n){ return (n<0?'-':'') + '$' + Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+  function usdSigned(n){ return (n>0?'+':n<0?'-':'') + '$' + Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+  // 表示用（usdOnとyearに応じて円/ドルを切替）。ドル不可時は円で表示。
+  function fmtCur(n, year){
+    if(usdOn){ var u=toUSD(n, year); if(u!=null) return usd(u); }
+    return yen(n);
+  }
+  function fmtCurSigned(n, year){
+    if(usdOn){ var u=toUSD(n, year); if(u!=null) return usdSigned(u); }
+    return signed(n);
+  }
+
+  function load(){
+    try{ var r = localStorage.getItem(KEY); if(r) data = JSON.parse(r); }catch(e){ data = []; }
+    data.sort(function(a,b){ return a.date < b.date ? -1 : 1; });
+    render();
+  }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){} }
+
+  var rangeFrom = null, rangeTo = null;
+  var RANGE_KEY = 'asset_tracker_range_v1';
+  function saveRange(){
+    try{
+      if(rangeFrom==null && rangeTo==null){ localStorage.removeItem(RANGE_KEY); }
+      else { localStorage.setItem(RANGE_KEY, JSON.stringify({ from:rangeFrom, to:rangeTo })); }
+    }catch(e){}
+  }
+  function loadRange(){
+    try{
+      var s=localStorage.getItem(RANGE_KEY);
+      if(s){ var o=JSON.parse(s); rangeFrom=o.from||null; rangeTo=o.to||null; }
+    }catch(e){}
+  }
+  var viewMode = 'both'; // 'both' | 'asset' | 'pnl'
+  var AXISMODE_KEY = 'asset_tracker_axismode_v1';
+  var axisMode = 'fit'; // 'fit'（ゼロ基準・見やすさ優先）| 'real'（ゼロ基準・資産と損益を同縮尺）
+
+  // 有効な上乗せ額：この日付「以下（その日を含む）」を対象とするONルールの合計を、この記録に加算
+  function boostFor(dateStr){
+    var add=0;
+    for(var i=0;i<boosts.length;i++){
+      var b=boosts[i];
+      if(b.on && b.date && dateStr <= b.date){ add += (isNaN(b.amount)?0:b.amount); }
+    }
+    return add;
+  }
+  // 元データに上乗せを反映したコピーを返す（元データは書き換えない）
+  function boostedData(){
+    return data.map(function(d){
+      var add = boostFor(d.date);
+      return add ? { date:d.date, value:d.value+add, pnl:d.pnl } : d;
+    });
+  }
+  function loadBoosts(){
+    try{ var s=localStorage.getItem(BOOST_KEY); if(s){ boosts=JSON.parse(s)||[]; } }catch(e){ boosts=[]; }
+  }
+  function saveBoosts(){ try{ localStorage.setItem(BOOST_KEY, JSON.stringify(boosts)); }catch(e){} }
+
+  // 単純移動平均（period本）。先頭のperiod-1点はnull（描かない）
+  function movingAverage(arr, period){
+    var out=[], sum=0, q=[];
+    for(var i=0;i<arr.length;i++){
+      var v=arr[i];
+      if(v==null){ // 値が無い点は平均対象外。窓もリセットせず、その点はnull
+        out.push(null);
+        continue;
+      }
+      q.push(v); sum+=v;
+      if(q.length>period){ sum-=q.shift(); }
+      out.push(q.length===period ? sum/period : null);
+    }
+    return out;
+  }
+  function loadMA(){
+    try{ var s=localStorage.getItem(MA_KEY); if(s){ var a=JSON.parse(s); if(Array.isArray(a)) maList=a; } }catch(e){}
+  }
+  function saveMA(){ try{ localStorage.setItem(MA_KEY, JSON.stringify(maList)); }catch(e){} }
+
+  function filtered(){
+    return boostedData().filter(function(d){
+      if(rangeFrom && d.date < rangeFrom) return false;
+      if(rangeTo && d.date > rangeTo) return false;
+      return true;
+    });
+  }
+
+  var viewData = [];      // 現在表示中のデータ（filtered結果）
+  var cumRawData = [];    // 表示中データの累積損益（円ベース）
+  var selectedIdx = null; // グラフで選択中の点。nullなら最新
+  var hideHighlight = false; // グラフ外クリック時は色（強調）だけ隠す
+
+  // 指定モードの基準値と補足テキストを返す
+  function computeCompare(view, idx, mode){
+    if(mode === 'last'){
+      if(idx >= 1) return { base: view[idx-1].value, note: view[idx-1].date + ' と比較' };
+      return { base: null, note: '前の記録なし' };
+    } else if(mode === 'yoy'){
+      var yr = view[idx].date.slice(0,4);
+      var b = yoyBases[yr];
+      if(b!=null && !isNaN(b)) return { base: b, note: yr + '年の基準額と比較' };
+      return { base: null, note: yr + '年の基準額が未設定' };
+    } else if(mode === 'base'){
+      if(principalBase!=null && !isNaN(principalBase)) return { base: principalBase, note: '元手 '+yen(principalBase)+' と比較' };
+      return { base: null, note: '元手が未設定' };
+    } else if(mode === 'first'){
+      return { base: view[0].value, note: view[0].date + '（期間の先頭）と比較' };
+    }
+    return { base: null, note: '' };
+  }
+
+  // 損益合計モードの比較：累積損益系列での基準値と補足
+  function computeCumCompare(view, idx, mode){
+    var cum = cumRawData;
+    if(mode === 'last'){
+      if(idx >= 1) return { base: cum[idx-1], note: view[idx-1].date + ' からの増減' };
+      return { base: null, note: '前の記録なし' };
+    } else if(mode === 'yoy'){
+      // 前年末（前年の最後の点）の累積損益と比較
+      var yr = view[idx].date.slice(0,4);
+      var prevYearIdx = -1;
+      for(var j=idx; j>=0; j--){ if(view[j].date.slice(0,4) < yr){ prevYearIdx = j; break; } }
+      if(prevYearIdx>=0) return { base: cum[prevYearIdx], note: view[prevYearIdx].date + '（前年）からの増減' };
+      return { base: null, note: '前年のデータなし' };
+    } else if(mode === 'base'){
+      // 損益は0から積み上がるので、合計そのもの（0基準）
+      return { base: 0, note: '累計の合計損益' };
+    } else if(mode === 'first'){
+      return { base: cum[0], note: view[0].date + '（期間の先頭）からの増減' };
+    }
+    return { base: null, note: '' };
+  }
+
+  function renderCompareSlot(slot, view, idx, curVal){
+    var cEl = document.getElementById('stat-compare-'+slot);
+    var cNote = document.getElementById('stat-compare-note-'+slot);
+    if(!view.length){
+      cEl.textContent='—'; cEl.style.color='var(--text)'; cNote.textContent=''; return;
+    }
+    var isCum = (viewMode === 'cumpnl');
+    var r = isCum ? computeCumCompare(view, idx, compareModes[slot])
+                  : computeCompare(view, idx, compareModes[slot]);
+    var current = isCum ? cumRawData[idx] : curVal;
+    if(r.base!=null && !isNaN(r.base)){
+      var diff = current - r.base;
+      var rate = r.base !== 0 ? (diff / Math.abs(r.base)) * 100 : 0;
+      var rateHtml = (r.base === 0) ? '' : '<small>' + pct(rate) + '</small>';
+      // 差額は選択中の点の年のレートで換算（%はレートに依らず同じ）
+      cEl.innerHTML = fmtCurSigned(diff, view[idx].date.slice(0,4)) + rateHtml;
+      cEl.style.color = diff>0?PLUS:diff<0?MINUS:'var(--text)';
+    } else {
+      cEl.textContent = '—'; cEl.style.color='var(--text)';
+    }
+    cNote.textContent = r.note;
+  }
+
+  function updateStats(idx){
+    var view = viewData;
+    var curEl = document.getElementById('stat-current');
+    var curLabelEl = document.getElementById('stat-current-label');
+
+    if(!view.length){
+      curLabelEl.textContent = '現在資産';
+      curEl.textContent = yen(0);
+      renderCompareSlot('A', view, 0, 0);
+      renderCompareSlot('B', view, 0, 0);
+      document.getElementById('stat-count').textContent = 0;
+      return;
+    }
+
+    // idxが未指定 or 範囲外なら最新
+    if(idx==null || idx<0 || idx>=view.length) idx = view.length-1;
+    var isLatest = (idx === view.length-1);
+    var curVal = view[idx].value;
+
+    curEl.style.color='var(--text)';
+
+    curLabelEl.textContent = isLatest ? '現在資産' : view[idx].date + ' 時点';
+    curEl.textContent = fmtCur(curVal, view[idx].date.slice(0,4));
+
+    renderCompareSlot('A', view, idx, curVal);
+    renderCompareSlot('B', view, idx, curVal);
+
+    document.getElementById('stat-count').textContent = view.length;
+  }
+
+  function render(){
+    var view = filtered();
+    viewData = view;
+    // 選択インデックスが範囲外になったらリセット
+    if(selectedIdx!=null && selectedIdx>=view.length) selectedIdx=null;
+
+    var labels = view.map(function(d){
+      var p = d.date.split('-');
+      return p[1] + '/' + p[2];
+    });
+    var years = view.map(function(d){ return d.date.slice(0,4); });
+    var fullDates = view.map(function(d){ return d.date; });
+    var values = view.map(function(d){ return d.value; });
+    var pnls = view.map(function(d){ return (d.pnl==null) ? null : d.pnl; });
+
+    // ドル表示時は各点をその年のレートで換算（レート無しの点はnull＝非表示）
+    var plotValues = values, plotPnls = pnls;
+    if(usdOn){
+      plotValues = view.map(function(d){ var u=toUSD(d.value, d.date.slice(0,4)); return u==null?null:u; });
+      plotPnls   = view.map(function(d){ if(d.pnl==null) return null; var u=toUSD(d.pnl, d.date.slice(0,4)); return u==null?null:u; });
+    }
+
+    // 損益合計（累積）: 円ベースで積み上げ（未入力は0扱い）
+    var cumRaw = [];
+    var run = 0;
+    view.forEach(function(d){ run += (d.pnl==null ? 0 : d.pnl); cumRaw.push(run); });
+    cumRawData = cumRaw;
+    // 年ごとの累計（年合計・その年の頭からの積み上げ）
+    var yearCumRaw = [];
+    var yrun = 0, curYr = null;
+    view.forEach(function(d){
+      var y=d.date.slice(0,4);
+      if(y!==curYr){ curYr=y; yrun=0; }
+      yrun += (d.pnl==null ? 0 : d.pnl);
+      yearCumRaw.push(yrun);
+    });
+    // 描画用（ドル表示ならその年のレートで換算）
+    var cumPlot = cumRaw;
+    if(usdOn){
+      cumPlot = view.map(function(d, i){ var u=toUSD(cumRaw[i], d.date.slice(0,4)); return u==null?null:u; });
+    }
+
+    // レート未設定の年があれば注意を出す
+    var note=document.getElementById('usd-note');
+    if(note){
+      if(usdOn){
+        var missing={};
+        view.forEach(function(d){ var y=d.date.slice(0,4); if(rateForYear(y)==null) missing[y]=true; });
+        var ys=Object.keys(missing).sort();
+        if(ys.length){
+          note.textContent='⚠ '+ys.join('・')+'年のドル円レートが未設定です。「ドル円レート（年ごと）を設定」で登録すると換算されます。';
+          note.style.display='block';
+        } else { note.style.display='none'; note.textContent=''; }
+      } else { note.style.display='none'; note.textContent=''; }
+    }
+
+    updateStats(selectedIdx);
+
+    drawChart(labels, plotValues, plotPnls, years, fullDates, values, pnls, cumPlot, cumRaw, yearCumRaw);
+    if(!rsDragging){ var bd=boostedData(); drawList(bd, bd.map(function(d){ return d.value; })); }
+    if(typeof updateRangeSlider==='function') updateRangeSlider();
+    saveRange();
+  }
+
+  function hexToRgba(hex, a){
+    var h=hex.replace('#',''); if(h.length===3){ h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2]; }
+    var r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+    return 'rgba('+r+','+g+','+b+','+a+')';
+  }
+
+  // 軸ラベル用にコンパクト表示（円: 万/億、ドル: K/M/B）
+  function compactNum(v){
+    var neg = v<0; var n=Math.abs(v);
+    var sign = neg?'-':'';
+    if(usdOn){
+      var cur='$';
+      if(n>=1e9) return sign+cur+trimNum(n/1e9)+'B';
+      if(n>=1e6) return sign+cur+trimNum(n/1e6)+'M';
+      if(n>=1e3) return sign+cur+trimNum(n/1e3)+'K';
+      return sign+cur+Math.round(n).toLocaleString('en-US');
+    } else {
+      var y='¥';
+      if(n>=1e8) return sign+y+trimNum(n/1e8)+'億';
+      if(n>=1e4) return sign+y+trimNum(n/1e4)+'万';
+      return sign+y+Math.round(n).toLocaleString('ja-JP');
+    }
+  }
+  function trimNum(x){
+    // 小数1桁まで、末尾0は落とす（例: 1.0→1, 1.5→1.5, 12.3→12.3）
+    var s=(Math.round(x*10)/10).toString();
+    return s;
+  }
+
+  // 目盛りの間隔を「切りの良い数字」に切り上げる（1 / 2 / 2.5 / 5 / 10 × 10^n）
+  function niceStep(x){
+    if(!(x>0) || !isFinite(x)) return 0;
+    var e=Math.pow(10, Math.floor(Math.log(x)/Math.LN10));
+    var m=x/e;
+    var n = m<=1.0000001 ? 1 : m<=2.0000001 ? 2 : m<=2.5000001 ? 2.5 : m<=5.0000001 ? 5 : 10;
+    return n*e;
+  }
+
+  function drawChart(labels, values, pnls, years, fullDates, rawValues, rawPnls, cumPnls, cumRawPnls, yearCumRawPnls){
+    var ctx = document.getElementById('chart');
+    if(chart) chart.destroy();
+    var axisGray = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#8a8a82';
+
+    // 損益合計推移モード：累積損益の棒グラフのみ
+    if(viewMode === 'cumpnl'){
+      var cumColors = cumPnls.map(function(v){ return v==null?'transparent':hexToRgba(v>=0?PLUS:MINUS, opacity.pnl); });
+      var cumScales = {
+        x:{ ticks:{ color:axisGray, autoSkip:false, maxRotation:0, font:{size:11},
+              callback:function(val, idx){
+                var isYearStart = idx===0 || (years[idx] !== years[idx-1]);
+                var n = labels.length;
+                var step = n<=13 ? 1 : n<=26 ? 2 : Math.ceil(n/13);
+                var showMonth = isYearStart || (idx % step === 0);
+                var mo = showMonth ? labels[idx] : '';
+                if(isYearStart) return [mo, years[idx]];
+                return mo;
+              } },
+            grid:{ display:false } },
+        yCum:{ position:'left',
+          ticks:{ color:axisGray, callback:function(v){
+            if(blurOn) return (v<0?'-':'')+(usdOn?'$':'¥')+'•••';
+            return compactNum(v);
+          } },
+          grid:{ color:'rgba(150,150,140,0.15)' },
+          title:{ display:true, text:usdOn?'損益合計($)':'損益合計', color:axisGray, font:{size:11} } }
+      };
+      chart = new Chart(ctx, {
+        data:{ labels:labels, datasets:[{ type:'bar', label:'損益合計', data:cumPnls, yAxisID:'yCum',
+          backgroundColor:cumColors, borderRadius:4, borderSkipped:false, maxBarThickness:28 }] },
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          animation: false,
+          layout:{ padding:{ top:26 } }, // 右上の「全画面」ボタンに目盛りが隠れないよう余白
+          onClick:function(evt){
+            if(!chart) return;
+            var pts = chart.getElementsAtEventForMode(evt, 'index', { intersect:false }, true);
+            if(pts && pts.length){ selectedIdx = pts[0].index; hideHighlight=false; updateStats(selectedIdx); highlightSelectedPoint(); }
+          },
+          interaction:{ mode:'index', intersect:false },
+          plugins:{
+            legend:{ display:false },
+            tooltip:{ callbacks:{
+              title:function(items){ return fullDates[items[0].dataIndex]; },
+              label:function(c){
+                var i=c.dataIndex;
+                var yr=(fullDates[i]||'').slice(0,4);
+                if(blurOn) return '損益合計: '+(usdOn?'$':'¥')+'•••';
+                return '損益合計: '+fmtCurSigned(cumRawPnls[i], yr);
+              }
+            }}
+          },
+          scales:cumScales
+        }
+      });
+      return;
+    }
+
+    var showAsset = viewMode !== 'pnl';
+    var showPnl   = viewMode !== 'asset';
+
+    // 選択中の点を強調（資産推移の点だけ枠を黒く／控えめに）
+    var selForHi = (hideHighlight || selectedIdx==null || selectedIdx<0 || selectedIdx>=values.length) ? -1 : selectedIdx;
+    var HI_BORDER = '#111111'; // 選択点の枠色（黒）
+
+    // 軸モード：fit=ゼロ基準(見やすさ優先) / real=ゼロ基準(資産の増減と損益を同縮尺)
+    // 損益は常に左の専用軸(yPnl)、資産は右(yAsset)。
+    var pnlAxis = 'yPnl';
+
+    var datasets = [];
+    if(showPnl){
+      datasets.push({ type:'bar', label:'損益', data:pnls, yAxisID:pnlAxis,
+        backgroundColor: pnls.map(function(v){ return v==null?'transparent':hexToRgba(v>=0?PLUS:MINUS, opacity.pnl); }),
+        borderRadius:4, borderSkipped:false, maxBarThickness:28, order:2 });
+    }
+    if(showAsset){
+      datasets.push({ type:'line', label:'資産推移', data:values, yAxisID:'yAsset',
+        borderColor:ACCENT, backgroundColor:hexToRgba(ACCENT, opacity.asset),
+        borderWidth:2, fill:true, tension:0.25,
+        pointRadius: values.map(function(_,i){ return i===selForHi?5:4; }),
+        pointHoverRadius: values.map(function(_,i){ return i===selForHi?6:5; }),
+        pointBackgroundColor: ACCENT,
+        pointBorderColor: values.map(function(_,i){ return i===selForHi?HI_BORDER:BG; }),
+        pointBorderWidth: values.map(function(_,i){ return i===selForHi?2.5:2; }),
+        order:1 });
+      // 移動平均線（複数・ON のもののみ）
+      maList.forEach(function(ma, mi){
+        if(!ma.on) return;
+        var p=parseInt(ma.period);
+        if(!p || p<2) return;
+        var maData=movingAverage(values, p);
+        datasets.push({ type:'line', label:'MA'+p, data:maData, yAxisID:'yAsset',
+          borderColor: MA_COLORS[mi % MA_COLORS.length], backgroundColor:'transparent',
+          borderWidth:1.5, fill:false, tension:0.25, pointRadius:0, pointHoverRadius:0,
+          borderDash:[], spanGaps:true, order:0 });
+      });
+    }
+
+    var scales = {
+      x:{ ticks:{ color:axisGray, autoSkip:false, maxRotation:0, font:{size:11},
+            callback:function(val, idx){
+              var isYearStart = idx===0 || (years[idx] !== years[idx-1]);
+              var n = labels.length;
+              var step = n<=13 ? 1 : n<=26 ? 2 : Math.ceil(n/13);
+              var showMonth = isYearStart || (idx % step === 0);
+              var mo = showMonth ? labels[idx] : '';
+              if(isYearStart) return [mo, years[idx]];
+              return mo;
+            } },
+          grid:{ display:false } }
+    };
+    var bothShown = showAsset && showPnl;
+    var zeroBase  = bothShown && (axisMode === 'fit' || axisMode === 'real');
+    var sameScale = (axisMode === 'real');
+
+    // 「ゼロ基準」：損益0のラインと、資産の開始点（左端）を必ず同じ高さに揃える。
+    // 横棒（グリッド）は基準ラインを起点に等間隔で引き、資産・損益の両方が
+    // その同じ横棒の上に「切りの良い間隔」で乗るように、軸の上限下限と目盛り幅を決める。
+    //   フィット … 資産と損益の目盛り幅は別々（損益は控えめの倍率をかける）
+    //   実寸   … 資産と損益の目盛り幅を同じにする（1円の高さが揃う）
+    var assetBounds=null, pnlBounds=null, assetStep=null, pnlStep=null, assetLabelShift=0;
+    if(zeroBase){
+      var av = values.filter(function(v){ return v!=null && !isNaN(v); });
+      var pv = pnls.filter(function(v){ return v!=null && !isNaN(v); });
+      // 資産の最初の有効値
+      var firstAsset=null;
+      for(var fi=0; fi<values.length; fi++){ if(values[fi]!=null && !isNaN(values[fi])){ firstAsset=values[fi]; break; } }
+      if(av.length && pv.length && firstAsset!=null){
+        var aMin=Math.min.apply(null, av), aMax=Math.max.apply(null, av);
+        var pMin=Math.min.apply(null, pv), pMax=Math.max.apply(null, pv);
+        // 基準（損益＝0／資産＝開始値）から上下に必要な幅
+        var pUp=Math.max(0, pMax), pDn=Math.max(0, -pMin);
+        var aUp=Math.max(0, aMax-firstAsset), aDn=Math.max(0, firstAsset-aMin);
+        // 損益は枠いっぱいまで伸ばさず控えめに（この割合まで）
+        var PNL_SHARE = 0.7;
+
+        // 横棒の区切り数。グラフの高さに合わせて 3〜7
+        var boxEl=document.getElementById('chart-box');
+        var boxH=(boxEl && boxEl.clientHeight) ? boxEl.clientHeight : 380;
+        var N=Math.max(3, Math.min(7, Math.round(boxH/78)));
+
+        // 基準ラインを下から何本目に置くか(k)。上下のムダな余白が最小になる位置を選ぶ
+        var need=function(dn, up, k){ return Math.max(dn/k, up/(N-k)); };
+        var waste=function(dn, up, k){ var tot=dn+up; if(!(tot>0)) return 1; return need(dn,up,k)*N/tot; };
+        var k=1, bestScore=Infinity;
+        for(var kk=1; kk<=N-1; kk++){
+          var sc = sameScale
+            ? waste(Math.max(pDn,aDn), Math.max(pUp,aUp), kk)
+            : Math.max(waste(aDn,aUp,kk), waste(pDn,pUp,kk));
+          if(sc < bestScore-1e-9){ bestScore=sc; k=kk; }
+        }
+
+        // 目盛り幅を切りの良い数字に切り上げる（データは必ず内包される）
+        var sa, sp;
+        if(sameScale){
+          sa = niceStep(need(Math.max(pDn,aDn), Math.max(pUp,aUp), k));
+          if(!(sa>0)) sa = niceStep(Math.max(Math.abs(firstAsset)*0.02, 1));
+          sp = sa;
+        } else {
+          sa = niceStep(need(aDn, aUp, k));
+          if(!(sa>0)) sa = niceStep(Math.max(Math.abs(firstAsset)*0.02, 1));
+          sp = niceStep(need(pDn, pUp, k)/PNL_SHARE);
+          if(!(sp>0)) sp = niceStep(Math.max(sa*0.05, 1));
+        }
+
+        assetStep=sa; pnlStep=sp;
+        pnlBounds  ={ min: -k*sp,           max: (N-k)*sp };
+        assetBounds={ min: firstAsset-k*sa, max: firstAsset+(N-k)*sa };
+
+        // 資産のラベルは開始値が起点なので「¥150.1万」のような半端な数字になりがち。
+        // 横棒の位置は動かさず、表示する数字だけを切りの良い値に寄せる。
+        // ズレは横棒の間隔の2%以内（画面上1px程度）に収まる範囲でしか許さない。
+        var tol = sa*0.02;
+        var topE = Math.floor(Math.log(sa)/Math.LN10);
+        var snapFound=false;
+        for(var ge=topE; ge>=topE-5 && !snapFound; ge--){
+          var base=Math.pow(10, ge);
+          var mults=[5, 2.5, 2, 1];
+          for(var mi2=0; mi2<mults.length; mi2++){
+            var g=mults[mi2]*base;
+            if(g > sa+1e-9) continue;
+            var snapped=Math.round(firstAsset/g)*g;
+            if(Math.abs(snapped-firstAsset) <= tol){ assetLabelShift = snapped-firstAsset; snapFound=true; break; }
+          }
+        }
+      }
+    }
+
+    if(showAsset){
+      scales.yAsset = { position:'right',
+        ticks:{ color:ACCENT, callback:function(v){
+          if(blurOn) return (usdOn?'$':'¥')+'•••';
+          return compactNum(v + assetLabelShift);
+        } },
+        grid:{ color:'rgba(150,150,140,0.15)' },
+        title:{ display:true, text: (usdOn?'資産($)':'資産'), color:ACCENT, font:{size:11} } };
+      if(assetBounds){
+        scales.yAsset.min=assetBounds.min; scales.yAsset.max=assetBounds.max;
+        scales.yAsset.ticks.stepSize=assetStep;   // 横棒は基準ラインから等間隔
+        scales.yAsset.ticks.autoSkip=false;       // 間引かせない（損益側とズレるため）
+      }
+    }
+    // 損益専用の軸（常に左側）
+    if(showPnl){
+      scales.yPnl = { position:'left',
+        ticks:{ color:axisGray, callback:function(v){
+          if(blurOn) return '•••';
+          return compactNum(v);
+        } },
+        grid: bothShown ? { display:false } : { color:'rgba(150,150,140,0.15)' },
+        title:{ display:true, text:usdOn?'損益($)':'損益', color:axisGray, font:{size:11} } };
+      if(pnlBounds){
+        scales.yPnl.min=pnlBounds.min; scales.yPnl.max=pnlBounds.max;
+        scales.yPnl.ticks.stepSize=pnlStep;  // 資産と同じ横棒の上に、切りの良い数字で並ぶ
+        scales.yPnl.ticks.autoSkip=false;
+      }
+    }
+
+    // ゼロ基準のときだけ、基準ライン（損益0＝資産の開始点）を破線で描いて位置を分かるようにする
+    var localPlugins = [];
+    if(assetBounds && pnlBounds){
+      localPlugins.push({
+        id:'zeroAlignBaseline',
+        afterDatasetsDraw:function(c){
+          var sc=c.scales.yPnl, area=c.chartArea;
+          if(!sc || !area) return;
+          var y=sc.getPixelForValue(0);
+          if(!isFinite(y)) return;
+          var g=c.ctx;
+          g.save();
+          g.setLineDash([5,4]);
+          g.lineWidth=1;
+          g.strokeStyle='rgba(150,150,140,0.65)';
+          g.beginPath(); g.moveTo(area.left, y); g.lineTo(area.right, y); g.stroke();
+          g.restore();
+        }
+      });
+    }
+
+    chart = new Chart(ctx, {
+      data:{
+        labels:labels,
+        datasets:datasets
+      },
+      plugins: localPlugins,
+      options:{
+        responsive:true, maintainAspectRatio:false,
+          animation: false,
+        layout:{ padding:{ top:26 } }, // 右上の「全画面」ボタンに目盛りが隠れないよう余白
+        onClick:function(evt){
+          if(!chart) return;
+          var pts = chart.getElementsAtEventForMode(evt, 'index', { intersect:false }, true);
+          if(pts && pts.length){
+            var i = pts[0].index;
+            selectedIdx = i;
+            hideHighlight=false;
+            updateStats(selectedIdx);
+            highlightSelectedPoint();
+          }
+        },
+        interaction:{ mode:'index', intersect:false },
+        plugins:{
+          legend:{ display:false },
+          tooltip:{ callbacks:{
+            title:function(items){
+              var i=items[0].dataIndex;
+              return fullDates[i];
+            },
+            label:function(c){
+            var i=c.dataIndex;
+            var yr = (fullDates[i]||'').slice(0,4);
+            var dsLabel = c.dataset.label||'';
+            // 移動平均線
+            if(/^MA\d+$/.test(dsLabel)){
+              if(c.raw==null) return dsLabel+': —';
+              if(blurOn) return dsLabel+': '+(usdOn?'$':'¥')+'•••';
+              return dsLabel+': '+(usdOn?'$':'¥')+Math.round(c.raw).toLocaleString(usdOn?'en-US':'ja-JP');
+            }
+            if(blurOn){ return c.dataset.type==='line' ? '資産: '+(usdOn?'$':'¥')+'•••' : (rawPnls[i]==null?'損益: 未入力':'損益: '+(usdOn?'$':'¥')+'•••  年合計 '+(usdOn?'$':'¥')+'•••  累計 '+(usdOn?'$':'¥')+'•••'); }
+            if(c.dataset.type==='line'){
+              var cv = rawValues[i];
+              if(i===0) return '資産: '+fmtCur(cv, yr);
+              var prev=rawValues[i-1], diff=cv-prev;
+              var rate=prev!==0?(diff/Math.abs(prev))*100:0;
+              return '資産: '+fmtCur(cv, yr)+'  (前回比 '+fmtCurSigned(diff, yr)+' / '+pct(rate)+')';
+            }
+            if(rawPnls[i]==null) return '損益: 未入力';
+            return '損益: '+fmtCurSigned(rawPnls[i], yr)
+                 + '  年合計 '+fmtCurSigned(yearCumRawPnls[i], yr)
+                 + '  累計 '+fmtCurSigned(cumRawPnls[i], yr);
+          }}}
+        },
+        scales:scales
+      }
+    });
+  }
+
+  var editingDate = null;
+
+  function drawList(view, values){
+    var el = document.getElementById('list');
+    if(!view.length){ el.innerHTML='<div class="empty">まだ記録がありません。日付と資産額を入力してください（損益は任意）。</div>'; return; }
+    el.innerHTML='';
+    for(var i=view.length-1;i>=0;i--){
+      var d=view[i], p=(d.pnl==null)?null:d.pnl;
+      var row=document.createElement('div'); row.className='row';
+
+      if(d.date===editingDate){
+        row.classList.add('editing');
+        var eyr=d.date.slice(0,4);
+        var eVal=d.value, ePnl=p;
+        var eCurLabel='(円)';
+        if(usdOn){
+          var uv=toUSD(d.value, eyr);
+          if(uv!=null){
+            eVal=Math.round(uv*100)/100;
+            ePnl=(p==null)?null:(function(){ var up=toUSD(p,eyr); return up==null?null:Math.round(up*100)/100; })();
+            eCurLabel='($)';
+          }
+        }
+        row.innerHTML='<span class="date">'+d.date+'</span>'+
+          '<span class="right edit-fields">'+
+          '<span class="edit-group">'+
+            '<button type="button" class="sign-btn" data-target="edit-val" title="＋／−を切替">±</button>'+
+            '<input type="number" step="any" class="edit-val no-spin" value="'+eVal+'" placeholder="資産額'+eCurLabel+'">'+
+          '</span>'+
+          '<span class="edit-group">'+
+            '<button type="button" class="sign-btn" data-target="edit-pnl" title="＋／−を切替">±</button>'+
+            '<input type="number" step="any" class="edit-pnl no-spin" value="'+(ePnl==null?'':ePnl)+'" placeholder="損益'+eCurLabel+'">'+
+          '</span>'+
+          '<button class="save-edit" data-date="'+d.date+'">保存</button>'+
+          '<button class="cancel-edit">取消</button>'+
+          '</span>';
+        el.appendChild(row);
+        continue;
+      }
+
+      var pctText='—', pctColor='var(--text-muted)';
+      if(i>0){
+        var prev=values[i-1], diff=values[i]-prev;
+        var rate=prev!==0?(diff/Math.abs(prev))*100:0;
+        pctText=pct(rate);
+        pctColor=diff>0?PLUS:diff<0?MINUS:'var(--text-muted)';
+      }
+      var pColor = p==null?'var(--text-muted)':p>0?PLUS:p<0?MINUS:'var(--text-muted)';
+      var yr = d.date.slice(0,4);
+      var pText = p==null?'—':fmtCurSigned(p, yr);
+      row.innerHTML='<span class="date">'+d.date+'</span>'+
+        '<span class="right">'+
+        '<span class="amt">'+fmtCur(d.value, yr)+'</span>'+
+        '<span class="pct" style="color:'+pctColor+'">'+pctText+'</span>'+
+        '<span class="pnl" style="color:'+pColor+'">'+pText+'</span>'+
+        '<button class="edit" data-date="'+d.date+'">編集</button>'+
+        '<button class="del" data-date="'+d.date+'">削除</button>'+
+        '</span>';
+      el.appendChild(row);
+    }
+
+    el.querySelectorAll('.del').forEach(function(b){
+      b.addEventListener('click', function(){
+        var dt=this.getAttribute('data-date');
+        if(!confirm(dt+' の記録を削除しますか？')) return;
+        var idx=data.findIndex(function(x){ return x.date===dt; });
+        if(idx>=0){ data.splice(idx,1); editingDate=null; save(); render(); }
+      });
+    });
+    el.querySelectorAll('.edit').forEach(function(b){
+      b.addEventListener('click', function(){
+        editingDate=this.getAttribute('data-date'); render();
+      });
+    });
+    el.querySelectorAll('.cancel-edit').forEach(function(b){
+      b.addEventListener('click', function(){ editingDate=null; render(); });
+    });
+    el.querySelectorAll('.sign-btn').forEach(function(b){
+      b.addEventListener('click', function(){
+        var input=this.parentNode.querySelector('input');
+        if(!input) return;
+        var v=input.value.trim();
+        if(v===''||v==='-'){ input.value='-'; input.focus(); return; }
+        var num=parseFloat(v);
+        if(isNaN(num)){ input.focus(); return; }
+        input.value = String(-num);
+        input.focus();
+      });
+    });
+    el.querySelectorAll('.save-edit').forEach(function(b){
+      b.addEventListener('click', function(){
+        var dt=this.getAttribute('data-date');
+        var container=this.parentNode;
+        var val=parseFloat(container.querySelector('.edit-val').value);
+        var pnlRaw=container.querySelector('.edit-pnl').value;
+        var pnl=pnlRaw===''?null:parseFloat(pnlRaw);
+        if(isNaN(val)){ container.querySelector('.edit-val').focus(); return; }
+        if(pnl!=null && isNaN(pnl)) pnl=null;
+
+        // ドル表示中はドルで編集されたものとして円へ換算して保存
+        if(usdOn){
+          var yr=dt.slice(0,4);
+          var vYen=toYEN(val, yr);
+          if(vYen==null){
+            alert(yr+'年のドル円レートが未設定です。先にレートを登録してください。');
+            return;
+          }
+          val=vYen;
+          if(pnl!=null){ var pYen=toYEN(pnl, yr); pnl=(pYen==null?null:pYen); }
+        }
+
+        var idx=data.findIndex(function(x){ return x.date===dt; });
+        if(idx>=0){ data[idx].value=val; data[idx].pnl=pnl; }
+        editingDate=null; save(); render();
+      });
+    });
+  }
+
+  function upsert(date, val, pnl){
+    var ex=data.findIndex(function(d){ return d.date===date; });
+    if(ex>=0){ data[ex].value=val; if(pnl!==undefined) data[ex].pnl=pnl; }
+    else { data.push({date:date, value:val, pnl:(pnl===undefined?null:pnl)}); }
+  }
+
+  document.getElementById('btn-add').addEventListener('click', function(){
+    var date=document.getElementById('in-date').value;
+    var val=parseFloat(document.getElementById('in-value').value);
+    var pnlRaw=document.getElementById('in-pnl').value;
+    var pnl=pnlRaw===''?null:parseFloat(pnlRaw);
+    if(!date || isNaN(val)) return;
+    if(pnl!=null && isNaN(pnl)) pnl=null;
+
+    // ドル表示中はドルで入力されたものとして、その年のレートで円に換算して保存
+    if(usdOn){
+      var yr=date.slice(0,4);
+      var vYen=toYEN(val, yr);
+      if(vYen==null){
+        alert(yr+'年のドル円レートが未設定です。先に「ドル円レート（年ごと）を設定」で登録してください。');
+        return;
+      }
+      val=vYen;
+      if(pnl!=null){ var pYen=toYEN(pnl, yr); pnl = (pYen==null?null:pYen); }
+    }
+
+    upsert(date, val, pnl);
+    data.sort(function(a,b){ return a.date<b.date?-1:1; });
+    document.getElementById('in-value').value='';
+    document.getElementById('in-pnl').value='';
+    save(); render();
+  });
+
+  document.getElementById('btn-bulk-toggle').addEventListener('click', function(){
+    var b=document.getElementById('bulk');
+    b.classList.toggle('open');
+    this.textContent = b.classList.contains('open') ? '▾ 過去データを一括貼り付け' : '▸ 過去データを一括貼り付け';
+  });
+
+  function normDate(s){
+    s=s.trim();
+    if(!s) return null;
+    function fmt(y, mo, da){
+      y=+y; mo=+mo; da=+da;
+      if(mo<1||mo>12) return null;
+      var dim=new Date(y, mo, 0).getDate(); // その月の日数
+      if(da<1||da>dim) return null;
+      return y+'-'+('0'+mo).slice(-2)+'-'+('0'+da).slice(-2);
+    }
+    function lastDay(y, mo){ return new Date(+y, +mo, 0).getDate(); }
+
+    // --- 月末(L)/月初(F)コマンド ---
+    var cmd=s.match(/^(\d+)([LFlf])$/);
+    if(cmd){
+      var digits=cmd[1];
+      var isLast = /l/i.test(cmd[2]);
+      var y, mo;
+      if(digits.length===3){ y='20'+digits.slice(0,2); mo=digits.slice(2); }        // 241 → 24,1
+      else if(digits.length===4){ y='20'+digits.slice(0,2); mo=digits.slice(2); }    // 2412 → 24,12
+      else if(digits.length===5){ y=digits.slice(0,4); mo=digits.slice(4); }         // 20241 → 2024,1
+      else if(digits.length===6){ y=digits.slice(0,4); mo=digits.slice(4); }         // 202412 → 2024,12
+      else return null;
+      if(+mo<1||+mo>12) return null;
+      var da = isLast ? lastDay(y, mo) : 1;
+      return fmt(y, mo, da);
+    }
+
+    // --- 区切りなしの数字 ---
+    if(/^\d+$/.test(s)){
+      if(s.length===8){ return fmt(s.slice(0,4), s.slice(4,6), s.slice(6,8)); }      // 20240131
+      if(s.length===6){ return fmt('20'+s.slice(0,2), s.slice(2,4), s.slice(4,6)); } // 240131 → 2024-01-31
+      return null;
+    }
+
+    // --- 区切りあり（/ または -）。年は2桁でも4桁でもOK ---
+    s=s.replace(/\//g,'-');
+    var m=s.match(/^(\d{2}|\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if(!m) return null;
+    var yy = m[1].length===2 ? ('20'+m[1]) : m[1];
+    return fmt(yy, m[2], m[3]);
+  }
+  function numClean(s){
+    if(s==null) return NaN;
+    return parseFloat(String(s).replace(/[¥,\s円]/g,''));
+  }
+
+  document.getElementById('btn-bulk-add').addEventListener('click', function(){
+    var text=document.getElementById('bulk-text').value;
+    var lines=text.split('\n');
+    var ok=0, skip=0;
+    for(var i=0;i<lines.length;i++){
+      var raw=lines[i].trim();
+      if(!raw) continue;
+      var parts=raw.split(/[,\t]+|\s{2,}|\s+/).filter(function(x){ return x!==''; });
+      if(parts.length<2){ skip++; continue; }
+      var date=normDate(parts[0]);
+      var val=numClean(parts[1]);
+      if(!date || isNaN(val)){ skip++; continue; }
+      var pnl = parts.length>=3 ? numClean(parts[2]) : null;
+      if(pnl!=null && isNaN(pnl)) pnl=null;
+      upsert(date, val, pnl);
+      ok++;
+    }
+    data.sort(function(a,b){ return a.date<b.date?-1:1; });
+    save(); render();
+    var msg=document.getElementById('bulk-msg');
+    msg.textContent = ok+'件を取り込みました' + (skip?'（'+skip+'件スキップ）':'');
+    if(ok) document.getElementById('bulk-text').value='';
+  });
+
+  document.getElementById('btn-export').addEventListener('click', function(){
+    if(!data.length) return;
+    var rows=[['日付','資産額','損益']].concat(data.map(function(d){
+      return [d.date, d.value, d.pnl==null?'':d.pnl];
+    }));
+    var csv='\uFEFF'+rows.map(function(r){ return r.join(','); }).join('\n');
+    var blob=new Blob([csv],{type:'text/csv'});
+    downloadBlob(blob, 'asset-tracker.csv');
+  });
+
+  function downloadBlob(blob, name){
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=name; a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  document.getElementById('btn-png').addEventListener('click', function(){
+    if(!chart){ return; }
+    var canvas=document.getElementById('chart');
+    var bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#ffffff';
+    var out=document.createElement('canvas');
+    out.width=canvas.width; out.height=canvas.height;
+    var cx=out.getContext('2d');
+    cx.fillStyle=bg; cx.fillRect(0,0,out.width,out.height);
+    cx.drawImage(canvas,0,0);
+    out.toBlob(function(blob){ downloadBlob(blob, 'asset-chart.png'); });
+  });
+
+  document.getElementById('btn-backup').addEventListener('click', function(){
+    var payload={ version:1, exportedAt:new Date().toISOString(), data:data, colors:colors };
+    var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    var stamp=new Date().toISOString().slice(0,10);
+    downloadBlob(blob, 'asset-backup-'+stamp+'.json');
+  });
+
+  document.getElementById('btn-restore').addEventListener('click', function(){
+    document.getElementById('restore-file').click();
+  });
+  document.getElementById('restore-file').addEventListener('change', function(){
+    var f=this.files && this.files[0]; if(!f) return;
+    var reader=new FileReader();
+    reader.onload=function(){
+      try{
+        var obj=JSON.parse(reader.result);
+        var arr = Array.isArray(obj) ? obj : obj.data;
+        if(!Array.isArray(arr)) throw new Error('形式が違います');
+        if(!confirm('現在のデータをバックアップの内容で置き換えます。よろしいですか？')) return;
+        data = arr.map(function(d){ return { date:d.date, value:Number(d.value), pnl:(d.pnl==null?null:Number(d.pnl)) }; })
+                  .filter(function(d){ return d.date && !isNaN(d.value); });
+        data.sort(function(a,b){ return a.date<b.date?-1:1; });
+        if(obj.colors){ colors=Object.assign({}, DEFAULTS, obj.colors); applyColors(); }
+        save(); render();
+        var note=document.getElementById('tools-note');
+        note.textContent = data.length+'件を読み込みました。';
+      }catch(e){
+        var note=document.getElementById('tools-note');
+        note.textContent = '読み込めませんでした（'+e.message+'）。';
+      }
+    };
+    reader.readAsText(f);
+    this.value='';
+  });
+
+  function clearPresetActive(){
+    document.querySelectorAll('.preset').forEach(function(b){ b.classList.remove('active'); });
+  }
+  // 上部の日付入力欄は廃止したので、存在するときだけ値を反映するヘルパー
+  function syncRangeInputs(){
+    var f=document.getElementById('range-from');
+    var t=document.getElementById('range-to');
+    if(f) f.value = rangeFrom || '';
+    if(t) t.value = rangeTo || '';
+  }
+
+  // グラフの選択点だけを強調更新（フル再描画せず高速）
+  function highlightSelectedPoint(){
+    if(!chart || !chart.data || !chart.data.datasets) return;
+    var HI_BORDER='#111111';
+    var n = chart.data.labels ? chart.data.labels.length : 0;
+    if(!n) return;
+    // selectedIdxがnull、または一時的に非表示のときはどの点も強調しない
+    var sel = (hideHighlight || selectedIdx==null || selectedIdx<0 || selectedIdx>=n) ? -1 : selectedIdx;
+    chart.data.datasets.forEach(function(ds){
+      if(ds.type==='line' && !/^MA\d+$/.test(ds.label||'')){
+        ds.pointRadius = ds.data.map(function(_,i){ return i===sel?5:4; });
+        ds.pointHoverRadius = ds.data.map(function(_,i){ return i===sel?6:5; });
+        ds.pointBorderColor = ds.data.map(function(_,i){ return i===sel?HI_BORDER:BG; });
+        ds.pointBorderWidth = ds.data.map(function(_,i){ return i===sel?2.5:2; });
+      }
+      // 棒（損益・損益合計）とMA線は強調しない
+    });
+    chart.update('none'); // アニメなしで即反映
+  }
+
+  /* ===== グラフをキーボードで操作（選択点を左右に移動） ===== */
+  (function(){
+    var canvas=document.getElementById('chart');
+    if(!canvas) return;
+    canvas.addEventListener('keydown', function(e){
+      var n=viewData.length; if(!n) return;
+      var k=e.key.toLowerCase();
+      var delta = (e.key==='ArrowLeft'||e.key==='ArrowDown'||k==='a') ? -1
+                : (e.key==='ArrowRight'||e.key==='ArrowUp'||k==='d') ? 1 : 0;
+      if(!delta) return;
+      var cur = (selectedIdx==null) ? n-1 : selectedIdx;
+      var next = Math.max(0, Math.min(n-1, cur+delta));
+      selectedIdx = next;
+      hideHighlight = false;
+      updateStats(selectedIdx);
+      highlightSelectedPoint(); // グラフの強調のみ更新
+      e.preventDefault();
+    });
+    // クリックでフォーカスも当てる（点選択と併用）
+    canvas.addEventListener('mousedown', function(){ canvas.focus(); });
+
+    // グラフの外をクリックしたら点の強調（色）だけ戻す。カードの選択は維持。
+    document.addEventListener('mousedown', function(e){
+      var box=document.getElementById('chart-box');
+      // グラフ内のクリックは対象外（強調を維持）
+      if(box && box.contains(e.target)) return;
+      if(hideHighlight) return;
+      hideHighlight=true;
+      highlightSelectedPoint();
+    });
+  })();
+
+  var rsFromIdx = 0, rsToIdx = 0; // 全データ配列上のインデックス
+  var rsDragging = false;         // スライダー操作中はアニメ抑制
+  function rsDates(){ return data.map(function(d){ return d.date; }); }
+
+  // 現在の rangeFrom/rangeTo からハンドル位置(index)を求める
+  function rsSyncFromRange(){
+    var n = data.length;
+    if(!n){ rsFromIdx=0; rsToIdx=0; return; }
+    var dates = rsDates();
+    // from: rangeFrom 以上で最小のindex（無ければ0）
+    var fi = 0;
+    if(rangeFrom){ fi = 0; for(var i=0;i<n;i++){ if(dates[i] >= rangeFrom){ fi=i; break; } if(i===n-1) fi=n-1; } }
+    // to: rangeTo 以下で最大のindex（無ければ末尾）
+    var ti = n-1;
+    if(rangeTo){ ti = n-1; for(var j=n-1;j>=0;j--){ if(dates[j] <= rangeTo){ ti=j; break; } if(j===0) ti=0; } }
+    if(fi>ti){ var t=fi; fi=ti; ti=t; }
+    rsFromIdx=fi; rsToIdx=ti;
+  }
+
+  function updateRangeSlider(){
+    var wrap=document.getElementById('rangeslider');
+    var n=data.length;
+    if(n<2){ wrap.style.display='none'; return; }
+    wrap.style.display='block';
+    rsSyncFromRange();
+    var dates=rsDates();
+    var track=document.getElementById('rs-track');
+    var hFrom=document.getElementById('rs-handle-from');
+    var hTo=document.getElementById('rs-handle-to');
+    var fill=document.getElementById('rs-fill');
+    var pFrom = rsFromIdx/(n-1)*100;
+    var pTo = rsToIdx/(n-1)*100;
+    hFrom.style.left=pFrom+'%';
+    hTo.style.left=pTo+'%';
+    fill.style.left=pFrom+'%';
+    fill.style.width=(pTo-pFrom)+'%';
+    document.getElementById('rs-from-label').textContent=dates[rsFromIdx];
+    document.getElementById('rs-to-label').textContent=dates[rsToIdx];
+  }
+
+  (function(){
+    var wrap=document.getElementById('rangeslider');
+    var track=document.getElementById('rs-track');
+    var hFrom=document.getElementById('rs-handle-from');
+    var hTo=document.getElementById('rs-handle-to');
+    var dragging=null; // 'from' | 'to'
+    var rsActive='to'; // 最後に操作したつまみ（キーボード対象）
+
+    function idxFromClientX(clientX){
+      var n=data.length; if(n<2) return 0;
+      var rect=track.getBoundingClientRect();
+      var p=(clientX-rect.left)/rect.width;
+      p=Math.max(0, Math.min(1, p));
+      return Math.round(p*(n-1));
+    }
+    function applyIdx(){
+      var dates=rsDates();
+      // インデックス→日付をrangeへ（端が全体なら null にして「全期間」に）
+      rangeFrom = (rsFromIdx<=0) ? null : dates[rsFromIdx];
+      rangeTo   = (rsToIdx>=data.length-1) ? null : dates[rsToIdx];
+      syncRangeInputs();
+      clearPresetActive();
+      render(); // renderの中でupdateRangeSliderも呼ばれる
+    }
+    function onMove(e){
+      if(!dragging) return;
+      var x=(e.touches?e.touches[0].clientX:e.clientX);
+      var idx=idxFromClientX(x);
+      if(dragging==='from'){ rsFromIdx=Math.min(idx, rsToIdx); }
+      else { rsToIdx=Math.max(idx, rsFromIdx); }
+      applyIdx();
+      if(e.cancelable) e.preventDefault();
+    }
+    function onUp(){
+      dragging=null;
+      rsDragging=false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+      render(); // ドラッグ完了後に一覧なども更新
+    }
+    function startDrag(which){
+      return function(e){
+        dragging=which;
+        rsActive=which;
+        rsDragging=true;
+        // preventDefaultでフォーカスが外れるので明示的にフォーカスする
+        (which==='from'?hFrom:hTo).focus();
+        markActive();
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchmove', onMove, { passive:false });
+        document.addEventListener('touchend', onUp);
+        if(e.cancelable) e.preventDefault();
+      };
+    }
+    function markActive(){
+      hFrom.classList.toggle('rs-active', rsActive==='from');
+      hTo.classList.toggle('rs-active', rsActive==='to');
+    }
+    hFrom.addEventListener('mousedown', startDrag('from'));
+    hFrom.addEventListener('touchstart', startDrag('from'), { passive:false });
+    hTo.addEventListener('mousedown', startDrag('to'));
+    hTo.addEventListener('touchstart', startDrag('to'), { passive:false });
+
+    // トラックをクリックしたら近い方のハンドルを移動
+    track.addEventListener('mousedown', function(e){
+      if(e.target===hFrom||e.target===hTo) return;
+      var idx=idxFromClientX(e.clientX);
+      if(Math.abs(idx-rsFromIdx) <= Math.abs(idx-rsToIdx)){ rsFromIdx=Math.min(idx, rsToIdx); rsActive='from'; hFrom.focus(); }
+      else { rsToIdx=Math.max(idx, rsFromIdx); rsActive='to'; hTo.focus(); }
+      markActive();
+      applyIdx();
+    });
+
+    // キーボード操作（矢印・A/D で左右に1つずつ）
+    function moveActive(delta){
+      var n=data.length; if(n<2) return;
+      if(rsActive==='from'){ rsFromIdx=Math.max(0, Math.min(rsToIdx, rsFromIdx+delta)); }
+      else { rsToIdx=Math.min(n-1, Math.max(rsFromIdx, rsToIdx+delta)); }
+      applyIdx();
+    }
+    function onKey(e){
+      var k=e.key.toLowerCase();
+      var delta = (e.key==='ArrowLeft'||e.key==='ArrowDown'||k==='a') ? -1
+                : (e.key==='ArrowRight'||e.key==='ArrowUp'||k==='d') ? 1 : 0;
+      if(!delta) return;
+      moveActive(delta);
+      e.preventDefault();
+    }
+    // フォーカスやクリックでアクティブなつまみを切り替え
+    hFrom.addEventListener('focus', function(){ rsActive='from'; markActive(); });
+    hTo.addEventListener('focus', function(){ rsActive='to'; markActive(); });
+    hFrom.addEventListener('keydown', onKey);
+    hTo.addEventListener('keydown', onKey);
+    // つまみにフォーカスが無くてもスライダー領域にフォーカスがあれば効くように
+    wrap.addEventListener('keydown', onKey);
+    markActive();
+
+    document.getElementById('rs-reset').addEventListener('click', function(){
+      rangeFrom=null; rangeTo=null;
+      syncRangeInputs();
+      clearPresetActive();
+      render();
+    });
+  })();
+
+  /* ===== 表示切替（両方 / 資産のみ / 損益のみ） ===== */
+  document.querySelectorAll('.vm-btn').forEach(function(b){
+    b.addEventListener('click', function(){
+      viewMode = this.getAttribute('data-mode');
+      document.querySelectorAll('.vm-btn').forEach(function(x){ x.classList.remove('active'); });
+      this.classList.add('active');
+      updateAxisModeUI();
+      render();
+    });
+  });
+
+  /* ===== ゼロ基準の表示切替（フィット / 実寸） ===== */
+  function updateAxisModeUI(){
+    var bar=document.getElementById('axismode');
+    if(!bar) return;
+    // 「両方表示」のときだけ意味がある
+    var active = (viewMode==='both');
+    bar.style.opacity = active ? '1' : '.45';
+    bar.querySelectorAll('.axm-btn').forEach(function(x){ x.disabled = !active; });
+  }
+  (function(){
+    try{
+      var m=localStorage.getItem(AXISMODE_KEY);
+      // 旧バージョンの値からの移行（共通→実寸、個別/ゼロ揃え→フィット）
+      if(m==='shared') m='real';
+      else if(m==='separate'||m==='start') m='fit';
+      if(m==='fit'||m==='real') axisMode=m;
+    }catch(e){}
+    document.querySelectorAll('.axm-btn').forEach(function(b){
+      if(b.getAttribute('data-axm')===axisMode){ b.classList.add('active'); } else { b.classList.remove('active'); }
+      b.addEventListener('click', function(){
+        axisMode = this.getAttribute('data-axm');
+        document.querySelectorAll('.axm-btn').forEach(function(x){ x.classList.remove('active'); });
+        this.classList.add('active');
+        try{ localStorage.setItem(AXISMODE_KEY, axisMode); }catch(e){}
+        render();
+      });
+    });
+    updateAxisModeUI();
+  })();
+
+  /* ===== 比較モード切替（前回比 / 前年比 / 元本比） ===== */
+  (function(){
+    // 保存済みモードを復元
+    try{
+      var saved = JSON.parse(localStorage.getItem(CMP_KEY)||'null');
+      if(saved && typeof saved==='object'){
+        ['A','B'].forEach(function(s){
+          if(saved[s]==='last'||saved[s]==='yoy'||saved[s]==='base'||saved[s]==='first') compareModes[s]=saved[s];
+        });
+      }
+    }catch(e){}
+
+    // 各スロットのタブに active を反映しつつイベント登録
+    document.querySelectorAll('.cmp-tabs').forEach(function(group){
+      var slot = group.getAttribute('data-slot');
+      group.querySelectorAll('.cmp-tab').forEach(function(b){
+        if(b.getAttribute('data-cmp')===compareModes[slot]){ b.classList.add('active'); }
+        else { b.classList.remove('active'); }
+        b.addEventListener('click', function(e){
+          e.stopPropagation();
+          compareModes[slot] = this.getAttribute('data-cmp');
+          group.querySelectorAll('.cmp-tab').forEach(function(x){ x.classList.remove('active'); });
+          this.classList.add('active');
+          try{ localStorage.setItem(CMP_KEY, JSON.stringify(compareModes)); }catch(e){}
+          updateStats(selectedIdx);
+        });
+      });
+    });
+  })();
+
+  /* ===== 前年比の基準額（年ごと・保存あり） ===== */
+  function loadYoyBases(){
+    try{ var s=localStorage.getItem(YOY_KEY); if(s){ yoyBases=JSON.parse(s)||{}; } }catch(e){ yoyBases={}; }
+  }
+  function saveYoyBases(){
+    try{ localStorage.setItem(YOY_KEY, JSON.stringify(yoyBases)); }catch(e){}
+  }
+  function renderYoyList(){
+    var list=document.getElementById('yoy-list');
+    list.innerHTML='';
+    var years=Object.keys(yoyBases).sort(function(a,b){
+      return addPos.yoy==='bottom' ? Number(a)-Number(b) : Number(b)-Number(a);
+    });
+    if(!years.length){
+      list.innerHTML='<p style="font-size:13px;color:var(--text-muted);margin:0;">「＋ 年を追加」で年と基準額を登録してください。</p>';
+    }
+    years.forEach(function(yr){
+      list.appendChild(makeYoyItem(yr, yoyBases[yr]));
+    });
+  }
+  function makeYoyItem(yr, amt){
+    var row=document.createElement('div'); row.className='yoy-item';
+    row.innerHTML=
+      '<span class="yoy-year"><input type="number" class="yoy-year-in" value="'+(yr||'')+'" placeholder="年"></span>'+
+      '<input type="number" class="yoy-amt-in" value="'+(amt==null?'':amt)+'" placeholder="基準額（円）" inputmode="numeric">'+
+      '<button class="yoy-del">削除</button>'+
+      '<span class="yoy-warn" style="display:none;font-size:11px;color:var(--minus);"></span>';
+    var yIn=row.querySelector('.yoy-year-in');
+    var aIn=row.querySelector('.yoy-amt-in');
+    var warn=row.querySelector('.yoy-warn');
+    var prevYear = yr;
+
+    // この行以外で使われている年の集合
+    function otherYears(){
+      var set={};
+      document.querySelectorAll('#yoy-list .yoy-item').forEach(function(it){
+        if(it===row) return;
+        var y=it.querySelector('.yoy-year-in').value.trim();
+        if(y) set[y]=true;
+      });
+      return set;
+    }
+
+    function commit(){
+      var newYear=yIn.value.trim();
+      var amtRaw=aIn.value.trim();
+
+      // 他の行と年が重複していないかチェック
+      if(newYear && otherYears()[newYear]){
+        warn.textContent='年が重複しています';
+        warn.style.display='inline';
+        return; // 保存しない（別の行の値を上書きしない）
+      }
+      warn.style.display='none';
+
+      // 年が変わったら旧キーを消す
+      if(prevYear && prevYear!==newYear){ delete yoyBases[prevYear]; }
+      if(newYear){
+        if(amtRaw===''){ delete yoyBases[newYear]; }
+        else { yoyBases[newYear]=parseFloat(amtRaw); }
+      }
+      prevYear=newYear;
+      saveYoyBases(); updateStats(selectedIdx);
+    }
+    yIn.addEventListener('input', commit);
+    aIn.addEventListener('input', commit);
+    row.querySelector('.yoy-del').addEventListener('click', function(){
+      if(prevYear){ delete yoyBases[prevYear]; saveYoyBases(); }
+      renderYoyList(); updateStats(selectedIdx);
+    });
+    return row;
+  }
+  (function(){
+    loadYoyBases();
+    document.getElementById('btn-yoy-toggle').addEventListener('click', function(){
+      var b=document.getElementById('yoy-panel');
+      b.classList.toggle('open');
+      this.textContent = b.classList.contains('open') ? '▾ 前年比の基準額' : '▸ 前年比の基準額';
+    });
+    document.getElementById('btn-yoy-add').addEventListener('click', function(){
+      // 既に使われている年を集める
+      var used={};
+      Object.keys(yoyBases).forEach(function(y){ used[y]=true; });
+      document.querySelectorAll('#yoy-list .yoy-year-in').forEach(function(inp){
+        var v=inp.value.trim(); if(v) used[v]=true;
+      });
+      // データの最新年から、未使用の年を下方向に探す
+      var startYear = viewData.length
+        ? parseInt(viewData[viewData.length-1].date.slice(0,4))
+        : new Date().getFullYear();
+      var defYear='';
+      for(var y=startYear; y>startYear-30; y--){
+        if(!used[String(y)]){ defYear=String(y); break; }
+      }
+      var list=document.getElementById('yoy-list');
+      // 空メッセージを消す
+      if(list.querySelector('p')) list.innerHTML='';
+      var item=makeYoyItem(defYear, '');
+      if(addPos.yoy==='bottom'){ list.appendChild(item); } else { list.insertBefore(item, list.firstChild); }
+      var yi=item.querySelector('.yoy-year-in'); if(yi){ yi.focus(); yi.select(); }
+    });
+    renderYoyList();
+  })();
+
+  /* ===== 元本比の基準額（元手・保存あり） ===== */
+  (function(){
+    var input=document.getElementById('in-principal');
+    try{ var saved=localStorage.getItem(PRINCIPAL_KEY); if(saved!=null && saved!==''){ principalBase=parseFloat(saved); input.value=saved; } }catch(e){}
+    input.addEventListener('input', function(){
+      var v=this.value.trim();
+      if(v===''){ principalBase=null; try{ localStorage.removeItem(PRINCIPAL_KEY); }catch(e){} }
+      else { principalBase=parseFloat(v); try{ localStorage.setItem(PRINCIPAL_KEY, v); }catch(e){} }
+      updateStats(selectedIdx);
+    });
+    document.getElementById('btn-principal-toggle').addEventListener('click', function(){
+      var b=document.getElementById('principal-panel');
+      b.classList.toggle('open');
+      this.textContent = b.classList.contains('open') ? '▾ 元本比の基準額' : '▸ 元本比の基準額';
+    });
+  })();
+
+  /* ===== 表示/非表示トグル（入力フォーム・記録一覧） ===== */
+  (function(){
+    var TOGGLE_KEY = 'asset_tracker_toggles_v1';
+    var state = {};
+    try{ state = JSON.parse(localStorage.getItem(TOGGLE_KEY)||'{}') || {}; }catch(e){ state={}; }
+    function saveState(){ try{ localStorage.setItem(TOGGLE_KEY, JSON.stringify(state)); }catch(e){} }
+
+    // key: 保存用キー, btn: ボタンid, panel: パネルid, label: ラベル, defCollapsed: 初期折りたたみ
+    function setup(key, btnId, panelId, label, defCollapsed){
+      var btn=document.getElementById(btnId);
+      var panel=document.getElementById(panelId);
+      if(!btn||!panel) return;
+      function apply(collapsed){
+        panel.classList.toggle('collapsed', collapsed);
+        btn.textContent = (collapsed ? '▸ ' : '▾ ') + label;
+      }
+      var collapsed = (key in state) ? !!state[key] : !!defCollapsed;
+      apply(collapsed);
+      btn.addEventListener('click', function(){
+        collapsed = !panel.classList.contains('collapsed');
+        apply(collapsed);
+        state[key]=collapsed; saveState();
+      });
+    }
+
+    setup('form', 'btn-form-toggle', 'form-panel', '記録を入力', false);
+    setup('list', 'btn-list-toggle', 'list', '記録一覧を表示', true);
+  })();
+
+  /* ===== 現在資産カードをタップで「最新」に戻す ===== */
+  (function(){
+    var card = document.getElementById('stat-current-label').closest('.stat');
+    if(card){
+      card.style.cursor='pointer';
+      card.title='タップで最新に戻す';
+      card.addEventListener('click', function(){
+        selectedIdx = null;
+        updateStats(null);
+        highlightSelectedPoint();
+      });
+    }
+  })();
+
+  /* ===== グラフの高さをドラッグで変更 ===== */
+  (function(){
+    var HKEY='asset_tracker_chart_h_v1';
+    var box=document.getElementById('chart-box');
+    var handle=document.getElementById('chart-resize');
+    var MIN=220, MAX=900;
+
+    // 保存済みの高さを復元
+    try{ var h=parseInt(localStorage.getItem(HKEY)); if(!isNaN(h)){ h=Math.max(MIN,Math.min(MAX,h)); box.style.setProperty('--chart-h', h+'px'); } }catch(e){}
+
+    var startY=0, startH=0, dragging=false;
+    function pointerY(e){ return e.touches ? e.touches[0].clientY : e.clientY; }
+    function onMove(e){
+      if(!dragging) return;
+      var dy=pointerY(e)-startY;
+      var h=Math.max(MIN, Math.min(MAX, startH+dy));
+      box.style.setProperty('--chart-h', h+'px');
+      if(chart) chart.resize();
+      if(e.cancelable) e.preventDefault();
+    }
+    function onUp(){
+      if(!dragging) return;
+      dragging=false;
+      box.classList.remove('resizing');
+      var cur=parseInt(getComputedStyle(box).height);
+      try{ localStorage.setItem(HKEY, cur); }catch(e){}
+      if(chart) chart.resize();
+      render(); // 高さに応じて横棒の本数を引き直す
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+    }
+    function onDown(e){
+      dragging=true;
+      box.classList.add('resizing');
+      startY=pointerY(e);
+      startH=parseInt(getComputedStyle(box).height);
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, { passive:false });
+      document.addEventListener('touchend', onUp);
+      if(e.cancelable) e.preventDefault();
+    }
+    handle.addEventListener('mousedown', onDown);
+    handle.addEventListener('touchstart', onDown, { passive:false });
+
+    // ダブルクリックで既定の高さに戻す
+    handle.addEventListener('dblclick', function(){
+      box.style.setProperty('--chart-h', '380px');
+      try{ localStorage.setItem(HKEY, 380); }catch(e){}
+      if(chart) chart.resize();
+    });
+  })();
+
+  /* ===== 全画面表示 ===== */
+  (function(){
+    var box=document.getElementById('chart-box');
+    var btn=document.getElementById('btn-fs');
+    var slider=document.getElementById('rangeslider');
+    var sliderHome=null; // 元の位置を覚えるためのプレースホルダ
+    function isFs(){ return document.fullscreenElement || document.webkitFullscreenElement; }
+    btn.addEventListener('click', function(){
+      if(isFs()){
+        (document.exitFullscreen||document.webkitExitFullscreen).call(document);
+      } else {
+        (box.requestFullscreen||box.webkitRequestFullscreen).call(box);
+      }
+    });
+    function onChange(){
+      var fs=isFs();
+      btn.textContent = fs ? '✕ 閉じる' : '⛶ 全画面';
+      if(fs){
+        // スライダーを全画面のグラフ内へ移動して操作できるように
+        if(slider && !sliderHome){
+          sliderHome=document.createComment('rs-home');
+          slider.parentNode.insertBefore(sliderHome, slider);
+          box.appendChild(slider);
+          slider.classList.add('rs-in-fs');
+        }
+      } else {
+        // 元の位置へ戻す
+        if(slider && sliderHome){
+          sliderHome.parentNode.insertBefore(slider, sliderHome);
+          sliderHome.parentNode.removeChild(sliderHome);
+          sliderHome=null;
+          slider.classList.remove('rs-in-fs');
+        }
+      }
+      if(chart) setTimeout(function(){ chart.resize(); render(); }, 60);
+    }
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+  })();
+
+  /* ===== 年月日クイックピッカー ===== */
+  (function(){
+    var panel=document.getElementById('qp-panel');
+    var btn=document.getElementById('btn-qp');
+    if(!panel || !btn) return; // 上部ピッカーは廃止したので何もしない
+    var fy=document.getElementById('qp-from-y'), fm=document.getElementById('qp-from-m'), fd=document.getElementById('qp-from-d');
+    var ty=document.getElementById('qp-to-y'),   tm=document.getElementById('qp-to-m'),   td=document.getElementById('qp-to-d');
+
+    function opt(val, text){ var o=document.createElement('option'); o.value=val; o.textContent=text; return o; }
+
+    // 年の選択肢：データがあればその範囲、なければ現在年±5年
+    function yearRange(){
+      var now=new Date().getFullYear();
+      var min=now-5, max=now;
+      if(data.length){
+        min=parseInt(data[0].date.slice(0,4));
+        max=parseInt(data[data.length-1].date.slice(0,4));
+        // 少し余裕を持たせる
+        max=Math.max(max, now);
+      }
+      var arr=[]; for(var y=max; y>=min; y--){ arr.push(y); }
+      return arr;
+    }
+    function fillYears(sel){
+      sel.innerHTML='';
+      yearRange().forEach(function(y){ sel.appendChild(opt(String(y), y+'年')); });
+    }
+    function fillMonths(sel, allowEmpty){
+      sel.innerHTML='';
+      if(allowEmpty) sel.appendChild(opt('', '—'));
+      for(var m=1;m<=12;m++){ sel.appendChild(opt(('0'+m).slice(-2), m+'月')); }
+    }
+    function fillDays(sel){
+      sel.innerHTML='';
+      sel.appendChild(opt('', '—'));
+      for(var d=1;d<=31;d++){ sel.appendChild(opt(('0'+d).slice(-2), d+'日')); }
+    }
+
+    function buildAll(){
+      fillYears(fy); fillYears(ty);
+      fillMonths(fm, true); fillMonths(tm, true);
+      fillDays(fd); fillDays(td);
+    }
+
+    // 現在の rangeFrom/rangeTo を各セレクトへ反映
+    function syncFromRange(){
+      function set(dateStr, ySel, mSel, dSel){
+        if(dateStr){
+          var p=dateStr.split('-');
+          ySel.value=p[0]; mSel.value=p[1]; dSel.value=p[2];
+        } else {
+          // 未設定：データ端に寄せる
+          if(data.length){
+            var edge = (ySel===fy) ? data[0].date : data[data.length-1].date;
+            var q=edge.split('-'); ySel.value=q[0]; mSel.value=q[1]; dSel.value='';
+          }
+        }
+      }
+      set(rangeFrom, fy, fm, fd);
+      set(rangeTo, ty, tm, td);
+    }
+
+    function lastDayOfMonth(y, m){ return new Date(y, m, 0).getDate(); }
+
+    // 開始日を組み立て（日が空なら月初、月が空なら1/1）
+    function buildFrom(){
+      var y=fy.value; if(!y) return null;
+      var m=fm.value || '01';
+      var d=fd.value || '01';
+      return y+'-'+m+'-'+d;
+    }
+    // 終了日を組み立て（日が空なら月末、月が空なら12/31）
+    function buildTo(){
+      var y=ty.value; if(!y) return null;
+      var m=tm.value;
+      var d=td.value;
+      if(!m){ m='12'; }
+      if(!d){ d=('0'+lastDayOfMonth(parseInt(y), parseInt(m))).slice(-2); }
+      return y+'-'+m+'-'+d;
+    }
+
+    btn.addEventListener('click', function(){
+      var open=panel.classList.toggle('open');
+      btn.classList.toggle('active', open);
+      if(open){ buildAll(); syncFromRange(); }
+    });
+
+    document.getElementById('qp-apply').addEventListener('click', function(){
+      var f=buildFrom(), t=buildTo();
+      if(f && t && f>t){ var tmp=f; f=t; t=tmp; } // 逆なら入れ替え
+      rangeFrom=f; rangeTo=t;
+      document.getElementById('range-from').value = rangeFrom || '';
+      document.getElementById('range-to').value = rangeTo || '';
+      clearPresetActive();
+      render();
+    });
+
+    document.getElementById('qp-clear').addEventListener('click', function(){
+      rangeFrom=null; rangeTo=null;
+      document.getElementById('range-from').value='';
+      document.getElementById('range-to').value='';
+      clearPresetActive();
+      syncFromRange();
+      render();
+    });
+  })();
+
+  ['accent','plus','minus','bg'].forEach(function(k){
+    var el=document.getElementById('col-'+k);
+    el.addEventListener('input', function(){
+      colors[k]=this.value; applyColors(); render();
+    });
+  });
+  document.getElementById('btn-color-reset').addEventListener('click', function(){
+    colors=Object.assign({}, DEFAULTS); applyColors(); render();
+  });
+
+  /* ===== 透明度スライダー（資産推移の塗り・損益の棒） ===== */
+  (function(){
+    var aIn=document.getElementById('opac-asset');
+    var pIn=document.getElementById('opac-pnl');
+    var aVal=document.getElementById('opac-asset-val');
+    var pVal=document.getElementById('opac-pnl-val');
+    // 保存された値を復元
+    try{ var s=localStorage.getItem(OPACITY_KEY); if(s){ var o=JSON.parse(s); if(o){ if(o.asset!=null)opacity.asset=o.asset; if(o.pnl!=null)opacity.pnl=o.pnl; } } }catch(e){}
+    aIn.value=opacity.asset; pIn.value=opacity.pnl;
+    function pctText(v){ return Math.round(v*100)+'%'; }
+    aVal.textContent=pctText(opacity.asset);
+    pVal.textContent=pctText(opacity.pnl);
+    function saveOpacity(){ try{ localStorage.setItem(OPACITY_KEY, JSON.stringify(opacity)); }catch(e){} }
+    aIn.addEventListener('input', function(){ opacity.asset=parseFloat(this.value); aVal.textContent=pctText(opacity.asset); saveOpacity(); render(); });
+    pIn.addEventListener('input', function(){ opacity.pnl=parseFloat(this.value); pVal.textContent=pctText(opacity.pnl); saveOpacity(); render(); });
+  })();
+
+  /* ===== ドル表示切替 ===== */
+  (function(){
+    var btn=document.getElementById('btn-usd');
+    function apply(on){
+      usdOn = on;
+      btn.classList.toggle('active', on);
+      btn.textContent = on ? '¥ 円表示' : '$ ドル表示';
+      updateInputCurrencyLabels();
+      render(); // 全表示を更新
+    }
+    var on=false;
+    try{ on = localStorage.getItem(USD_KEY)==='1'; }catch(e){}
+    usdOn = on; btn.classList.toggle('active', on); btn.textContent = on ? '¥ 円表示' : '$ ドル表示';
+    updateInputCurrencyLabels();
+    btn.addEventListener('click', function(){
+      apply(!usdOn);
+      try{ localStorage.setItem(USD_KEY, usdOn?'1':'0'); }catch(e){}
+    });
+  })();
+
+  /* ===== ドル円レート（年ごと・保存あり） ===== */
+  function loadUsdRates(){
+    try{ var s=localStorage.getItem(USDRATE_KEY); if(s){ usdRates=JSON.parse(s)||{}; } }catch(e){ usdRates={}; }
+  }
+  function saveUsdRates(){
+    try{ localStorage.setItem(USDRATE_KEY, JSON.stringify(usdRates)); }catch(e){}
+  }
+  function renderRateList(){
+    var list=document.getElementById('rate-list');
+    list.innerHTML='';
+    var years=Object.keys(usdRates).sort(function(a,b){
+      return addPos.rate==='bottom' ? Number(a)-Number(b) : Number(b)-Number(a);
+    });
+    if(!years.length){
+      list.innerHTML='<p style="font-size:13px;color:var(--text-muted);margin:0;">「＋ 年を追加」で年とドル円レートを登録してください。</p>';
+    }
+    years.forEach(function(yr){ list.appendChild(makeRateItem(yr, usdRates[yr])); });
+  }
+  function makeRateItem(yr, rate){
+    var row=document.createElement('div'); row.className='yoy-item';
+    row.innerHTML=
+      '<span class="yoy-year"><input type="number" class="yoy-year-in rate-year-in" value="'+(yr||'')+'" placeholder="年"></span>'+
+      '<input type="number" step="0.01" class="yoy-amt-in rate-amt-in" value="'+(rate==null?'':rate)+'" placeholder="ドル円（例 150.5）" inputmode="decimal">'+
+      '<button class="yoy-del">削除</button>'+
+      '<span class="yoy-warn" style="display:none;font-size:11px;color:var(--minus);"></span>';
+    var yIn=row.querySelector('.rate-year-in');
+    var aIn=row.querySelector('.rate-amt-in');
+    var warn=row.querySelector('.yoy-warn');
+    var prevYear=yr;
+    function otherYears(){
+      var set={};
+      document.querySelectorAll('#rate-list .rate-year-in').forEach(function(it){
+        if(it===yIn) return;
+        var y=it.value.trim(); if(y) set[y]=true;
+      });
+      return set;
+    }
+    function commit(){
+      var newYear=yIn.value.trim();
+      var amtRaw=aIn.value.trim();
+      if(newYear && otherYears()[newYear]){
+        warn.textContent='年が重複しています'; warn.style.display='inline'; return;
+      }
+      warn.style.display='none';
+      if(prevYear && prevYear!==newYear){ delete usdRates[prevYear]; }
+      if(newYear){
+        if(amtRaw===''){ delete usdRates[newYear]; }
+        else { usdRates[newYear]=parseFloat(amtRaw); }
+      }
+      prevYear=newYear;
+      saveUsdRates(); render();
+    }
+    yIn.addEventListener('input', commit);
+    aIn.addEventListener('input', commit);
+    row.querySelector('.yoy-del').addEventListener('click', function(){
+      if(prevYear){ delete usdRates[prevYear]; saveUsdRates(); }
+      renderRateList(); render();
+    });
+    return row;
+  }
+  (function(){
+    loadUsdRates();
+    document.getElementById('btn-rate-toggle').addEventListener('click', function(){
+      var b=document.getElementById('rate-panel');
+      b.classList.toggle('open');
+      this.textContent = b.classList.contains('open') ? '▾ ドル円レート' : '▸ ドル円レート';
+    });
+    document.getElementById('btn-rate-add').addEventListener('click', function(){
+      var used={};
+      Object.keys(usdRates).forEach(function(y){ used[y]=true; });
+      document.querySelectorAll('#rate-list .rate-year-in').forEach(function(inp){
+        var v=inp.value.trim(); if(v) used[v]=true;
+      });
+      var startYear = viewData.length
+        ? parseInt(viewData[viewData.length-1].date.slice(0,4))
+        : new Date().getFullYear();
+      var defYear='';
+      for(var y=startYear; y>startYear-30; y--){
+        if(!used[String(y)]){ defYear=String(y); break; }
+      }
+      var list=document.getElementById('rate-list');
+      if(list.querySelector('p')) list.innerHTML='';
+      var item=makeRateItem(defYear, '');
+      if(addPos.rate==='bottom'){ list.appendChild(item); } else { list.insertBefore(item, list.firstChild); }
+      var yi=item.querySelector('.rate-year-in'); if(yi){ yi.focus(); yi.select(); }
+    });
+    renderRateList();
+  })();
+
+  /* ===== 過去の資産を一時的に上乗せ ===== */
+  function renderBoostList(){
+    var list=document.getElementById('boost-list');
+    if(!list) return;
+    list.innerHTML='';
+    var sorted=boosts.slice().sort(function(a,b){
+      return addPos.boost==='bottom' ? (a.date<b.date?-1:1) : (a.date<b.date?1:-1);
+    });
+    if(!sorted.length){
+      list.innerHTML='<p style="font-size:13px;color:var(--text-muted);margin:0;">「＋ 上乗せを追加」で日付と上乗せ額を登録してください。</p>';
+    }
+    sorted.forEach(function(b){ list.appendChild(makeBoostItem(b)); });
+  }
+  function makeBoostItem(b){
+    var row=document.createElement('div'); row.className='yoy-item boost-item';
+    row.innerHTML=
+      '<input type="text" class="boost-date-in" value="'+(b.date||'')+'" placeholder="この日以下 例:240501">'+
+      '<input type="number" class="boost-amt-in" value="'+(b.amount==null?'':b.amount)+'" placeholder="上乗せ額（円）" inputmode="numeric">'+
+      '<span class="boost-toggle-sw'+(b.on?' on':'')+'"><span class="sw-track"></span><span class="sw-label">'+(b.on?'ON':'OFF')+'</span></span>'+
+      '<button class="yoy-del">削除</button>'+
+      '<span class="yoy-warn" style="display:none;font-size:11px;color:var(--minus);"></span>';
+    var dIn=row.querySelector('.boost-date-in');
+    var aIn=row.querySelector('.boost-amt-in');
+    var sw=row.querySelector('.boost-toggle-sw');
+    var swLabel=row.querySelector('.sw-label');
+    var warn=row.querySelector('.yoy-warn');
+    var ref=b;
+
+    function commit(){
+      var ds=normDate(dIn.value.trim());
+      var amt=parseFloat(aIn.value.trim());
+      if(dIn.value.trim() && !ds){ warn.textContent='日付が不正です'; warn.style.display='inline'; }
+      else { warn.style.display='none'; }
+      ref.date = ds || '';
+      ref.amount = isNaN(amt) ? 0 : amt;
+      saveBoosts(); render();
+    }
+    dIn.addEventListener('input', commit);
+    aIn.addEventListener('input', commit);
+    sw.addEventListener('click', function(){
+      ref.on = !ref.on;
+      sw.classList.toggle('on', ref.on);
+      swLabel.textContent = ref.on ? 'ON' : 'OFF';
+      saveBoosts(); render();
+    });
+    row.querySelector('.yoy-del').addEventListener('click', function(){
+      var i=boosts.indexOf(ref); if(i>=0) boosts.splice(i,1);
+      saveBoosts(); renderBoostList(); render();
+    });
+    return row;
+  }
+  (function(){
+    loadBoosts();
+    var tgl=document.getElementById('btn-boost-toggle');
+    if(tgl){
+      tgl.addEventListener('click', function(){
+        var b=document.getElementById('boost-panel');
+        b.classList.toggle('open');
+        this.textContent = b.classList.contains('open') ? '▾ 過去の資産を上乗せ' : '▸ 過去の資産を上乗せ';
+      });
+    }
+    var addBtn=document.getElementById('btn-boost-add');
+    if(addBtn){
+      addBtn.addEventListener('click', function(){
+        var def={ date:'', amount:0, on:true };
+        boosts.push(def);
+        saveBoosts();
+        var list=document.getElementById('boost-list');
+        if(list.querySelector('p')) list.innerHTML='';
+        var item=makeBoostItem(def);
+        if(addPos.boost==='bottom'){ list.appendChild(item); } else { list.insertBefore(item, list.firstChild); }
+        var di=item.querySelector('.boost-date-in'); if(di){ di.focus(); }
+      });
+    }
+    renderBoostList();
+  })();
+
+  /* ===== 移動平均線（MA）の設定 ===== */
+  function renderMAList(){
+    var list=document.getElementById('ma-list');
+    if(!list) return;
+    list.innerHTML='';
+    if(!maList.length){
+      list.innerHTML='<p style="font-size:13px;color:var(--text-muted);margin:0;">「＋ MAを追加」で期間を登録してください。</p>';
+    }
+    maList.forEach(function(ma, idx){ list.appendChild(makeMAItem(ma, idx)); });
+  }
+  function makeMAItem(ma, idx){
+    var color = MA_COLORS[idx % MA_COLORS.length];
+    var row=document.createElement('div'); row.className='yoy-item ma-item';
+    row.innerHTML=
+      '<span class="ma-swatch" style="background:'+color+'"></span>'+
+      '<input type="number" class="ma-period-in" value="'+(ma.period==null?'':ma.period)+'" placeholder="期間" inputmode="numeric" min="2">'+
+      '<span class="ma-unit">本</span>'+
+      '<span class="boost-toggle-sw'+(ma.on?' on':'')+'"><span class="sw-track"></span><span class="sw-label">'+(ma.on?'ON':'OFF')+'</span></span>'+
+      '<button class="yoy-del">削除</button>';
+    var pIn=row.querySelector('.ma-period-in');
+    var sw=row.querySelector('.boost-toggle-sw');
+    var swLabel=row.querySelector('.sw-label');
+    var ref=ma;
+    pIn.addEventListener('input', function(){
+      var p=parseInt(pIn.value.trim());
+      ref.period = isNaN(p) ? '' : p;
+      saveMA(); render();
+    });
+    sw.addEventListener('click', function(){
+      ref.on=!ref.on;
+      sw.classList.toggle('on', ref.on);
+      swLabel.textContent=ref.on?'ON':'OFF';
+      saveMA(); render();
+    });
+    row.querySelector('.yoy-del').addEventListener('click', function(){
+      var i=maList.indexOf(ref); if(i>=0) maList.splice(i,1);
+      saveMA(); renderMAList(); render();
+    });
+    return row;
+  }
+  (function(){
+    loadMA();
+    var tgl=document.getElementById('btn-ma-toggle');
+    if(tgl){
+      tgl.addEventListener('click', function(){
+        var b=document.getElementById('ma-panel');
+        b.classList.toggle('open');
+        this.textContent = b.classList.contains('open') ? '▾ 移動平均線（MA）' : '▸ 移動平均線（MA）';
+      });
+    }
+    var addBtn=document.getElementById('btn-ma-add');
+    if(addBtn){
+      addBtn.addEventListener('click', function(){
+        // 既定の期間は既存の最大+ある程度、なければ5
+        var def={ period:25, on:true };
+        maList.push(def);
+        saveMA();
+        var list=document.getElementById('ma-list');
+        if(list.querySelector('p')) list.innerHTML='';
+        renderMAList();
+        render();
+        // 追加した行の入力にフォーカス
+        var inputs=list.querySelectorAll('.ma-period-in');
+        if(inputs.length){ var last=inputs[inputs.length-1]; last.focus(); last.select(); }
+      });
+    }
+    renderMAList();
+  })();
+
+  (function(){
+    try{
+      var saved=JSON.parse(localStorage.getItem(ADDPOS_KEY)||'null');
+      if(saved && typeof saved==='object'){
+        if(saved.yoy==='top'||saved.yoy==='bottom') addPos.yoy=saved.yoy;
+        if(saved.rate==='top'||saved.rate==='bottom') addPos.rate=saved.rate;
+        if(saved.boost==='top'||saved.boost==='bottom') addPos.boost=saved.boost;
+      }
+    }catch(e){}
+    document.querySelectorAll('.add-pos-btn').forEach(function(b){
+      var which=b.getAttribute('data-list');
+      var pos=b.getAttribute('data-pos');
+      b.classList.toggle('active', addPos[which]===pos);
+      b.addEventListener('click', function(){
+        addPos[which]=pos;
+        document.querySelectorAll('.add-pos-btn[data-list="'+which+'"]').forEach(function(x){
+          x.classList.toggle('active', x.getAttribute('data-pos')===pos);
+        });
+        try{ localStorage.setItem(ADDPOS_KEY, JSON.stringify(addPos)); }catch(e){}
+        // 並び順を即反映
+        if(which==='yoy' && typeof renderYoyList==='function') renderYoyList();
+        if(which==='rate' && typeof renderRateList==='function') renderRateList();
+        if(which==='boost' && typeof renderBoostList==='function') renderBoostList();
+      });
+    });
+  })();
+
+  /* ===== 金額ぼかし ===== */
+  (function(){
+    var BLUR_KEY='asset_tracker_blur_v1';
+    var btn=document.getElementById('btn-blur');
+    function apply(on){
+      blurOn = on;
+      document.body.classList.toggle('blur-on', on);
+      btn.classList.toggle('active', on);
+      btn.textContent = on ? '👁 ぼかし解除' : '🙈 金額をぼかす';
+      if(chart) render(); // グラフの目盛り・ツールチップを更新
+    }
+    var on=false;
+    try{ on = localStorage.getItem(BLUR_KEY)==='1'; }catch(e){}
+    apply(on);
+    btn.addEventListener('click', function(){
+      apply(!blurOn);
+      try{ localStorage.setItem(BLUR_KEY, blurOn?'1':'0'); }catch(e){}
+    });
+  })();
+
+  /* ===== ホイール日付ピッカー ===== */
+  var wheelDate = { setToday:function(){}, set:function(){}, get:function(){return '';} };
+  (function(){
+    var wrap=document.getElementById('wheeldate');
+    if(!wrap) return;
+    var elY=document.getElementById('wd-y'), elM=document.getElementById('wd-m'), elD=document.getElementById('wd-d');
+    var hidden=document.getElementById('in-date');
+    var y=2025, m=1, d=1;
+
+    function daysInMonth(yy, mm){ return new Date(yy, mm, 0).getDate(); }
+    function clamp(){
+      if(m<1) m=12; if(m>12) m=1;
+      if(y<1900) y=1900; if(y>2100) y=2100;
+      var dim=daysInMonth(y,m);
+      if(d<1) d=dim; if(d>dim) d=1;
+    }
+    function paint(){
+      clamp();
+      elY.textContent=y; elM.textContent=m; elD.textContent=d;
+      hidden.value = y+'-'+('0'+m).slice(-2)+'-'+('0'+d).slice(-2);
+    }
+    function step(which, dir){
+      if(which==='y') y+=dir;
+      else if(which==='m'){ m+=dir; if(m>12){m=1;} if(m<1){m=12;} }
+      else if(which==='d'){
+        var dim=daysInMonth(y,m);
+        d+=dir; if(d>dim){d=1;} if(d<1){d=dim;}
+      }
+      paint();
+    }
+
+    wrap.querySelectorAll('.wd-col').forEach(function(col){
+      var which=col.getAttribute('data-wd');
+      // ホイールで増減
+      col.addEventListener('wheel', function(e){
+        e.preventDefault();
+        step(which, e.deltaY<0 ? 1 : -1);
+        setActive(col);
+      }, { passive:false });
+      // 上下ドラッグでも増減
+      var startY=null, accum=0;
+      col.addEventListener('mousedown', function(e){
+        setActive(col); startY=e.clientY; accum=0;
+        function mv(ev){
+          if(startY==null) return;
+          var dy=startY-ev.clientY; // 上へドラッグで増加
+          var stepsN=Math.trunc((accum+dy)/14);
+          if(stepsN!==0){ for(var i=0;i<Math.abs(stepsN);i++){ step(which, stepsN>0?1:-1); } startY=ev.clientY; accum=0; }
+          else { accum+=dy; startY=ev.clientY; }
+        }
+        function up(){ startY=null; document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+        document.addEventListener('mousemove',mv);
+        document.addEventListener('mouseup',up);
+      });
+      // タッチの上下スワイプ
+      col.addEventListener('touchstart', function(e){ setActive(col); startY=e.touches[0].clientY; accum=0; }, {passive:true});
+      col.addEventListener('touchmove', function(e){
+        if(startY==null) return;
+        var dy=startY-e.touches[0].clientY;
+        var stepsN=Math.trunc((accum+dy)/14);
+        if(stepsN!==0){ for(var i=0;i<Math.abs(stepsN);i++){ step(which, stepsN>0?1:-1); } startY=e.touches[0].clientY; accum=0; }
+        else { accum+=dy; startY=e.touches[0].clientY; }
+        e.preventDefault();
+      }, {passive:false});
+      col.addEventListener('touchend', function(){ startY=null; });
+    });
+
+    function setActive(col){
+      wrap.querySelectorAll('.wd-col').forEach(function(c){ c.classList.remove('active'); });
+      col.classList.add('active');
+    }
+
+    wheelDate.setToday=function(){ var t=new Date(); y=t.getFullYear(); m=t.getMonth()+1; d=t.getDate(); paint(); };
+    wheelDate.set=function(str){ if(!str) return; var p=str.split('-'); y=parseInt(p[0]); m=parseInt(p[1]); d=parseInt(p[2]); paint(); };
+    wheelDate.get=function(){ return hidden.value; };
+
+    paint();
+  })();
+
+  try{ var sc=localStorage.getItem(COLOR_KEY); if(sc) colors=Object.assign({}, DEFAULTS, JSON.parse(sc)); }catch(e){}
+  applyColors();
+
+  wheelDate.setToday();
+  loadRange();
+  load();
+})();
+</script>
+</body>
+</html>
