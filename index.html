@@ -260,6 +260,51 @@
   .vm-btn{height:32px; padding:0 14px; font-size:13px; font-weight:400;
     background:transparent; color:var(--text-sub); border:1px solid var(--border); border-radius:18px;}
   .vm-btn.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+
+  /* ===== v52: スマホ幅対応 ===== */
+  @media (max-width:640px){
+    .wrap{padding:16px 12px 40px;}
+
+    /* iOS対策: 16px未満の入力欄はフォーカス時に自動ズームされる */
+    input, textarea, select{font-size:16px;}
+
+    /* 記録入力: 日付を1行、資産額と損益を1行、追加ボタンを1行 */
+    .form{gap:10px; padding:14px;}
+    .form .field:first-child{flex:1 1 100%; min-width:0;}
+    .form .field{min-width:96px;}
+    #btn-add{flex:1 1 100%; width:100%;}
+
+    /* 日付ピッカー: 年月日を画面幅いっぱいに3等分 */
+    .wheeldate{display:flex; width:100%; gap:6px;}
+    .wd-col{flex:1 1 0; min-width:0; padding:8px 4px;}
+
+    /* 記録一覧: はみ出さないよう折り返す */
+    .row{flex-wrap:wrap; gap:6px 8px;}
+    .row .right{margin-left:auto; flex-wrap:wrap; justify-content:flex-end; gap:8px;}
+    .row .pct{min-width:52px;}
+    .row .pnl{min-width:66px;}
+    .row.editing .edit-fields{flex:1 1 100%;}
+    .edit-fields input{width:100%;}
+
+    /* 統計カード */
+    .stat{padding:12px;}
+    .stat .val{font-size:19px;}
+    .cmp-tab{font-size:10px; padding:0 1px;}
+
+    /* 期間まわり */
+    .range-dates{flex:1 1 100%;}
+    .range-dates input{flex:1; width:auto;}
+    .rs-hint{display:none;}
+
+    /* 設定パネルの入力行 */
+    .yoy-item input.yoy-amt-in{min-width:0;}
+    .boost-item input.boost-amt-in{min-width:0;}
+    .boost-item input.boost-date-in{width:104px;}
+    .qp-col{min-width:0;}
+
+    /* グラフ */
+    .chart-box{padding:10px 8px 16px;}
+  }
 </style>
 </head>
 <body>
