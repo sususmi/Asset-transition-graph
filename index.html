@@ -201,6 +201,18 @@
   .save-edit{height:30px; padding:0 12px; font-size:12px; background:var(--accent); color:#fff; border:none;}
   .cancel-edit{height:30px; padding:0 10px; font-size:12px; background:transparent; color:var(--text-sub); border:1px solid var(--border);}
   .empty{text-align:center; color:var(--text-muted); font-size:13px; padding:16px;}
+  .pedit{display:flex; flex-direction:column; gap:4px; margin-top:8px;}
+  .pe-head{display:flex; gap:8px; align-items:center; font-size:12px; color:var(--text-muted);
+    padding:0 12px 4px;}
+  .pe-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px;}
+  .pe-row .pe-date{color:var(--text-sub); min-width:88px;}
+  .pe-row .pe-cell{display:flex; align-items:center; gap:5px;}
+  .pe-row .pe-cell i{width:8px; height:8px; border-radius:2px; flex:0 0 auto;}
+  .pe-row .pe-cell input{width:104px; height:30px; font-size:13px; text-align:right;}
+  .pe-row .pe-total{margin-left:auto; font-weight:600; font-variant-numeric:tabular-nums;}
+  .pe-row .pe-total.diff{color:var(--minus);}
+  .pe-note{font-size:12px; color:var(--text-muted); padding:4px 12px 0;}
   .tools{display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:16px;}
   .tools button{background:transparent; color:var(--text-sub); border:1px solid var(--border);
     font-weight:400; font-size:13px;}
@@ -390,6 +402,7 @@
     <button class="vm-btn" data-mode="asset">資産推移のみ</button>
     <button class="vm-btn" data-mode="pnl">損益のみ</button>
     <button class="vm-btn" data-mode="cumpnl">損益合計推移</button>
+    <button class="vm-btn" data-mode="parts">内訳のみ</button>
   </div>
   <div class="legend">
     <span><span class="line-dot" style="background:var(--accent)"></span>資産推移</span>
@@ -457,6 +470,18 @@
           <li><b>月初コマンド <code>F</code></b>：その月の1日。<code>241F</code> → 2024-01-01、<code>2412F</code> → 2024-12-01</li>
         </ul>
         <div class="bulk-help-note">※ L/F は月が1桁でも2桁でも同じ書き方（年2桁＋月、または年4桁＋月）。<code>202412L</code> のように4桁年でも可。</div>
+      </div>
+      <div class="bulk-help">
+        <div class="bulk-help-title">内訳も一緒に入れる</div>
+        <ul>
+          <li>損益のうしろに <code>内訳名 金額</code> を並べる。いくつでも可<br><code>20240301 638291 6383 証券 73529 銀行 6292</code></li>
+          <li><code>証券:73529</code> <code>証券=73529</code> のように区切ってもよい。<b>名前に空白が入る場合はこの形で</b></li>
+          <li>すでに登録済みの内訳なら <code>証券73529</code> と続けて書いてもよい</li>
+          <li><b>損益は省略可。</b>3つめが数字でなければ、そこから内訳として読む<br><code>20240301 638291 証券 73529</code></li>
+          <li><b>資産額を <code>-</code> にすると内訳の合計が資産額になる</b><br><code>20240301 - 6383 証券 73529 銀行 6292</code> → 資産額 79821</li>
+          <li>未登録の内訳名は<b>自動で作られる</b>（色は自動、表示はON）。取り込み後にメッセージで報告される</li>
+        </ul>
+        <div class="bulk-help-note">※ 資産額と内訳の合計が食い違う行は、<b>書いた資産額を優先</b>して取り込み、件数を報告します。</div>
       </div>
       <textarea id="bulk-text" placeholder="241F, 1000000, 0&#10;24/2/1, 1050000, 50000&#10;240301, 1030000&#10;2412L	1120000	90000"></textarea>
       <div class="bulk-actions">
@@ -533,8 +558,12 @@
     </div>
   </div>
 
-  <button class="bulk-toggle" id="btn-list-toggle" style="margin-top:8px;">▸ 記録一覧を表示</button>
+  <div class="settings-toggles" style="margin-top:8px;">
+    <button class="bulk-toggle" id="btn-list-toggle">▸ 記録一覧を表示</button>
+    <button class="bulk-toggle" id="btn-pedit-toggle">▸ 内訳を編集</button>
+  </div>
   <div class="list collapsed" id="list"></div>
+  <div class="pedit collapsed" id="pedit"></div>
 
   <div class="tools">
     <button id="btn-png">グラフを画像保存</button>
@@ -765,7 +794,7 @@
   function boostedData(){
     return data.map(function(d){
       var add = boostFor(d.date);
-      return add ? { date:d.date, value:d.value+add, pnl:d.pnl } : d;
+      return add ? { date:d.date, value:d.value+add, pnl:d.pnl, parts:d.parts } : d;
     });
   }
   function loadBoosts(){
@@ -982,20 +1011,105 @@
 
     drawChart(labels, plotValues, plotPnls, years, fullDates, values, pnls, cumPlot, cumRaw, yearCumRaw);
     if(!rsDragging){ var bd=boostedData(); drawList(bd, bd.map(function(d){ return d.value; })); }
+    if(!skipPeditRedraw) drawPartsEdit();
     if(typeof updateRangeSlider==='function') updateRangeSlider();
     saveRange();
   }
 
-  function updateLegendParts(showAsset){
+  function updateLegendParts(show, series){
     var box=document.getElementById('legend-parts');
     if(!box) return;
     var html='';
-    if(showAsset){
-      partSeries().forEach(function(ps){
+    if(show){
+      (series||partSeries()).forEach(function(ps){
         html+='<span><span class="line-dot" style="background:'+escAttr(ps.color)+'"></span>'+escAttr(ps.name)+'</span>';
       });
     }
     box.innerHTML=html;
+  }
+
+  /* ===== 過去記録の内訳を編集するパネル ===== */
+  // 内訳を書き換えたら、その記録の資産額を内訳の合計に合わせる
+  function applyPartsTotal(rec){
+    var t=partsSum(rec);
+    if(t!=null) rec.value=t;
+    return t;
+  }
+  function drawPartsEdit(){
+    var el=document.getElementById('pedit');
+    if(!el) return;
+    if(!partDefs.length){
+      el.innerHTML='<div class="empty">先に「資産の内訳」で内訳を登録してください。</div>';
+      return;
+    }
+    if(usdOn){
+      el.innerHTML='<div class="empty">ドル表示中は内訳を編集できません。円表示に戻してから編集してください。</div>';
+      return;
+    }
+    var view=viewData||[];
+    if(!view.length){ el.innerHTML='<div class="empty">表示中の期間に記録がありません。</div>'; return; }
+    el.innerHTML='';
+    var head=document.createElement('div');
+    head.className='pe-note';
+    head.textContent='内訳を書き換えると、その記録の資産額は内訳の合計に置き換わります。空欄のままの記録は資産額を変更しません。';
+    el.appendChild(head);
+
+    for(var i=view.length-1;i>=0;i--){
+      el.appendChild(makePartEditRow(view[i].date));
+    }
+  }
+  function makePartEditRow(date){
+    var rec=null;
+    for(var i=0;i<data.length;i++){ if(data[i].date===date){ rec=data[i]; break; } }
+    var row=document.createElement('div'); row.className='pe-row';
+    var html='<span class="pe-date">'+escAttr(date)+'</span>';
+    partDefs.forEach(function(pd){
+      var v=(rec && rec.parts && rec.parts[pd.id]!=null) ? rec.parts[pd.id] : '';
+      html+='<span class="pe-cell" title="'+escAttr(pd.name||'内訳')+'">'+
+        '<i style="background:'+escAttr(pd.color)+'"></i>'+
+        '<input type="number" step="any" class="pe-in no-spin" data-pid="'+escAttr(pd.id)+'" '+
+        'value="'+(v===''?'':v)+'" placeholder="'+escAttr(pd.name||'内訳')+'"></span>';
+    });
+    html+='<span class="pe-total"></span>';
+    row.innerHTML=html;
+
+    var totalEl=row.querySelector('.pe-total');
+    function paintTotal(){
+      if(!rec){ totalEl.textContent='—'; return; }
+      var t=partsSum(rec);
+      if(t==null){ totalEl.textContent='合計 —  /  資産 '+yen(rec.value); totalEl.className='pe-total'; return; }
+      totalEl.textContent='合計 '+yen(t);
+      totalEl.className='pe-total'+(Math.abs(t-rec.value)>0.5?' diff':'');
+    }
+    Array.prototype.forEach.call(row.querySelectorAll('.pe-in'), function(inp){
+      inp.addEventListener('input', function(){
+        if(!rec) return;
+        var pid=inp.getAttribute('data-pid');
+        var raw=inp.value.trim();
+        if(!rec.parts) rec.parts={};
+        if(raw===''){ delete rec.parts[pid]; }
+        else {
+          var n=parseFloat(raw);
+          if(isNaN(n)) return;
+          rec.parts[pid]=n;
+        }
+        var left=0;
+        for(var k in rec.parts){ if(Object.prototype.hasOwnProperty.call(rec.parts,k)) left++; }
+        if(!left) delete rec.parts;
+        applyPartsTotal(rec);
+        paintTotal();
+        save();
+        renderKeepPedit();
+      });
+    });
+    paintTotal();
+    return row;
+  }
+  // 入力中にパネルごと作り直すとフォーカスが飛ぶので、そこだけ再描画しない
+  var skipPeditRedraw=false;
+  function renderKeepPedit(){
+    skipPeditRedraw=true;
+    try{ render(); } finally { skipPeditRedraw=false; }
   }
 
   // 表示中の記録に対応した、ONの内訳の系列を返す
@@ -1004,16 +1118,17 @@
     if(!viewData || !viewData.length) return out;
     partDefs.forEach(function(pd){
       if(!pd.on) return;
-      var any=false;
+      var any=false, raw=[];
       var arr=viewData.map(function(d){
         var v=(d.parts && d.parts[pd.id]!=null && !isNaN(d.parts[pd.id])) ? Number(d.parts[pd.id]) : null;
+        raw.push(v);
         if(v==null) return null;
         any=true;
         if(usdOn){ var u=toUSD(v, d.date.slice(0,4)); return u==null?null:u; }
         return v;
       });
       if(!any) return; // 一度も入力がない内訳は線を出さない
-      out.push({ id:pd.id, name:(pd.name||'内訳'), color:pd.color, data:arr });
+      out.push({ id:pd.id, name:(pd.name||'内訳'), color:pd.color, data:arr, raw:raw });
     });
     return out;
   }
@@ -1115,9 +1230,11 @@
       return;
     }
 
-    var showAsset = viewMode !== 'pnl';
-    updateLegendParts(showAsset);
-    var showPnl   = viewMode !== 'asset';
+    var showAsset = (viewMode === 'both' || viewMode === 'asset');
+    var showPnl   = (viewMode === 'both' || viewMode === 'pnl');
+    var showParts = (viewMode === 'both' || viewMode === 'asset' || viewMode === 'parts');
+    var pseries   = showParts ? partSeries() : [];
+    updateLegendParts(showParts, pseries);
 
     // 選択中の点を強調（資産推移の点だけ枠を黒く／控えめに）
     var selForHi = (hideHighlight || selectedIdx==null || selectedIdx<0 || selectedIdx>=values.length) ? -1 : selectedIdx;
@@ -1154,9 +1271,12 @@
           borderWidth:1.5, fill:false, tension:0.25, pointRadius:0, pointHoverRadius:0,
           borderDash:[], spanGaps:true, order:0 });
       });
+    }
+    if(showParts){
       // 資産の内訳（ONのものだけ・何本でも）
-      partSeries().forEach(function(ps){
+      pseries.forEach(function(ps){
         datasets.push({ type:'line', label:ps.name, data:ps.data, yAxisID:'yAsset',
+          partId: ps.id,
           borderColor: ps.color, backgroundColor:'transparent',
           borderWidth:1.5, fill:false, tension:0.25, pointRadius:2, pointHoverRadius:4,
           pointBackgroundColor: ps.color, pointBorderColor: ps.color,
@@ -1190,8 +1310,8 @@
     if(zeroBase){
       var av = values.filter(function(v){ return v!=null && !isNaN(v); });
       // 内訳の線を出しているときは、その値も資産軸の範囲に入れる（下にはみ出して切れないように）
-      if(showAsset){
-        partSeries().forEach(function(ps){
+      if(showParts){
+        pseries.forEach(function(ps){
           ps.data.forEach(function(v){ if(v!=null && !isNaN(v)) av.push(v); });
         });
       }
@@ -1260,14 +1380,14 @@
       }
     }
 
-    if(showAsset){
+    if(showAsset || showParts){
       scales.yAsset = { position:'right',
         ticks:{ color:ACCENT, callback:function(v){
           if(blurOn) return (usdOn?'$':'¥')+'•••';
           return compactNum(v + assetLabelShift);
         } },
         grid:{ color:'rgba(150,150,140,0.15)' },
-        title:{ display:true, text: (usdOn?'資産($)':'資産'), color:ACCENT, font:{size:11} } };
+        title:{ display:true, text: (showAsset ? (usdOn?'資産($)':'資産') : (usdOn?'内訳($)':'内訳')), color:ACCENT, font:{size:11} } };
       if(assetBounds){
         scales.yAsset.min=assetBounds.min; scales.yAsset.max=assetBounds.max;
         scales.yAsset.ticks.stepSize=assetStep;   // 横棒は基準ラインから等間隔
@@ -1344,6 +1464,22 @@
             var i=c.dataIndex;
             var yr = (fullDates[i]||'').slice(0,4);
             var dsLabel = c.dataset.label||'';
+            // 資産の内訳（資産と同じく前月比と％を出す）
+            if(c.dataset.partId){
+              var ps=null;
+              for(var pi=0; pi<pseries.length; pi++){ if(pseries[pi].id===c.dataset.partId){ ps=pseries[pi]; break; } }
+              if(!ps) return dsLabel+': —';
+              var pvNow = ps.raw[i];
+              if(pvNow==null) return ps.name+': 未入力';
+              if(blurOn) return ps.name+': '+(usdOn?'$':'¥')+'•••';
+              // 直前の「入力がある」点と比べる
+              var pPrev=null;
+              for(var pj=i-1; pj>=0; pj--){ if(ps.raw[pj]!=null){ pPrev=ps.raw[pj]; break; } }
+              if(pPrev==null) return ps.name+': '+fmtCur(pvNow, yr);
+              var pDiff=pvNow-pPrev;
+              var pRate=pPrev!==0?(pDiff/Math.abs(pPrev))*100:0;
+              return ps.name+': '+fmtCur(pvNow, yr)+'  (前月比 '+fmtCurSigned(pDiff, yr)+' / '+pct(pRate)+')';
+            }
             // 移動平均線
             if(/^MA\d+$/.test(dsLabel)){
               if(c.raw==null) return dsLabel+': —';
@@ -1597,27 +1733,111 @@
     return parseFloat(String(s).replace(/[¥,\s円]/g,''));
   }
 
+  // 数値として読めるトークンか（内訳名との判別に使う）
+  function isNumTok(t){
+    if(t==null) return false;
+    var c=String(t).replace(/[¥,\s円]/g,'');
+    if(c==='') return false;
+    return /^[+-]?\d+(\.\d+)?$/.test(c);
+  }
+  // 内訳名 → 定義。無ければ作る（bulkでの新規作成をまとめて報告するため created に積む）
+  function findOrCreatePart(name, created){
+    var key=String(name).trim();
+    if(!key) return null;
+    for(var i=0;i<partDefs.length;i++){
+      if(String(partDefs[i].name).trim()===key) return partDefs[i];
+    }
+    var pd={ id:newPartId(), name:key, color:PART_COLORS[partDefs.length % PART_COLORS.length], on:true };
+    partDefs.push(pd);
+    created.push(key);
+    return pd;
+  }
+  // 4トークン目以降を「内訳名と金額の組」として読む
+  // 対応形式: 「名前:値」「名前=値」「名前 値」、および既存の内訳名に数字が続いた「名前値」
+  function parsePartTokens(toks, created){
+    var out={}, any=false, bad=false;
+    for(var i=0;i<toks.length;i++){
+      var t=toks[i], name=null, valStr=null;
+      var m=/^(.+?)\s*[:=]\s*(.+)$/.exec(t);
+      if(m){ name=m[1]; valStr=m[2]; }
+      else if(isNumTok(t)){ bad=true; break; } // 名前が来るべき位置に数字
+      else {
+        // 既存の内訳名 + 数字（例: 詳細6292）を、長い名前から順に照合
+        var cand=null;
+        var sorted=partDefs.slice().sort(function(a,b){
+          return String(b.name).length-String(a.name).length;
+        });
+        for(var j=0;j<sorted.length;j++){
+          var nm=String(sorted[j].name).trim();
+          if(nm && t.length>nm.length && t.indexOf(nm)===0 && isNumTok(t.slice(nm.length))){
+            cand={name:nm, val:t.slice(nm.length)}; break;
+          }
+        }
+        if(cand){ name=cand.name; valStr=cand.val; }
+        else {
+          // 次のトークンが金額
+          if(i+1>=toks.length || !isNumTok(toks[i+1])){ bad=true; break; }
+          name=t; valStr=toks[i+1]; i++;
+        }
+      }
+      var v=numClean(valStr);
+      if(isNaN(v)){ bad=true; break; }
+      var pd=findOrCreatePart(name, created);
+      if(!pd){ bad=true; break; }
+      out[pd.id]=v; any=true;
+    }
+    if(bad) return { error:true };
+    return { parts: any?out:null };
+  }
+
   document.getElementById('btn-bulk-add').addEventListener('click', function(){
     var text=document.getElementById('bulk-text').value;
     var lines=text.split('\n');
-    var ok=0, skip=0;
+    var ok=0, skip=0, mismatch=0, created=[];
+    var partsBefore=partDefs.length;
     for(var i=0;i<lines.length;i++){
       var raw=lines[i].trim();
       if(!raw) continue;
-      var parts=raw.split(/[,\t]+|\s{2,}|\s+/).filter(function(x){ return x!==''; });
-      if(parts.length<2){ skip++; continue; }
-      var date=normDate(parts[0]);
-      var val=numClean(parts[1]);
-      if(!date || isNaN(val)){ skip++; continue; }
-      var pnl = parts.length>=3 ? numClean(parts[2]) : null;
+      var toks=raw.split(/[,\t]+|\s{2,}|\s+/).filter(function(x){ return x!==''; });
+      if(toks.length<2){ skip++; continue; }
+      var date=normDate(toks[0]);
+      if(!date){ skip++; continue; }
+
+      // 資産額。「-」なら内訳の合計から求める
+      var autoTotal = (toks[1]==='-' || toks[1]==='ー' || toks[1]==='*');
+      var val = autoTotal ? null : numClean(toks[1]);
+      if(!autoTotal && isNaN(val)){ skip++; continue; }
+
+      // 3トークン目が数字なら損益。数字でなければ損益は省略され、そこから内訳が始まる
+      var idx=2, pnl=null;
+      if(toks.length>=3 && isNumTok(toks[2])){ pnl=numClean(toks[2]); idx=3; }
       if(pnl!=null && isNaN(pnl)) pnl=null;
-      upsert(date, val, pnl);
+
+      var pRes = (toks.length>idx) ? parsePartTokens(toks.slice(idx), created) : { parts:null };
+      if(pRes.error){ skip++; continue; }
+      var parts=pRes.parts;
+
+      if(autoTotal){
+        if(!parts){ skip++; continue; }
+        var t=0; for(var k in parts){ if(Object.prototype.hasOwnProperty.call(parts,k)) t+=parts[k]; }
+        val=t;
+      } else if(parts){
+        var t2=0; for(var k2 in parts){ if(Object.prototype.hasOwnProperty.call(parts,k2)) t2+=parts[k2]; }
+        if(Math.abs(t2-val)>0.5) mismatch++;
+      }
+
+      upsert(date, val, pnl, parts===null ? undefined : parts);
       ok++;
     }
+    if(partDefs.length!==partsBefore){ saveParts(); renderPartList(); renderPartInputs(); }
     data.sort(function(a,b){ return a.date<b.date?-1:1; });
     save(); render();
     var msg=document.getElementById('bulk-msg');
-    msg.textContent = ok+'件を取り込みました' + (skip?'（'+skip+'件スキップ）':'');
+    var extra='';
+    if(skip) extra += '（'+skip+'件スキップ）';
+    if(created.length) extra += ' 内訳を新規作成: '+created.filter(function(v,i,a){ return a.indexOf(v)===i; }).join('・');
+    if(mismatch) extra += ' ⚠ 内訳の合計と資産額が違う行が'+mismatch+'件（資産額は書いた値を優先）';
+    msg.textContent = ok+'件を取り込みました' + extra;
     if(ok) document.getElementById('bulk-text').value='';
   });
 
@@ -2130,6 +2350,7 @@
 
     setup('form', 'btn-form-toggle', 'form-panel', '記録を入力', false);
     setup('list', 'btn-list-toggle', 'list', '記録一覧を表示', true);
+    setup('pedit', 'btn-pedit-toggle', 'pedit', '内訳を編集', true);
   })();
 
   /* ===== 現在資産カードをタップで「最新」に戻す ===== */
