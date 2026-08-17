@@ -2239,11 +2239,41 @@
   });
 
   document.getElementById('btn-backup').addEventListener('click', function(){
-    var payload={ version:2, exportedAt:new Date().toISOString(), data:data, colors:colors, partDefs:partDefs };
+    var payload={ version:3, exportedAt:new Date().toISOString(),
+                  data:data, colors:colors, partDefs:partDefs,
+                  settings:collectSettings() };
     var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
     var stamp=new Date().toISOString().slice(0,10);
     downloadBlob(blob, 'asset-backup-'+stamp+'.json');
   });
+
+  // 記録本体を除く、このアプリの保存内容をまとめて取り出す。
+  // キーを個別に列挙せず接頭辞で拾うので、あとで設定が増えても自動でバックアップに入る。
+  function collectSettings(){
+    var out={};
+    try{
+      for(var i=0;i<localStorage.length;i++){
+        var k=localStorage.key(i);
+        if(!k || k.indexOf('asset_tracker_')!==0) continue;
+        if(k===KEY) continue; // 記録本体は data として別に持つ
+        out[k]=localStorage.getItem(k);
+      }
+    }catch(e){}
+    return out;
+  }
+  function applySettings(obj){
+    var n=0;
+    if(!obj || typeof obj!=='object') return 0;
+    for(var k in obj){
+      if(!Object.prototype.hasOwnProperty.call(obj,k)) continue;
+      if(k.indexOf('asset_tracker_')!==0) continue; // 想定外のキーは書き込まない
+      if(k===KEY) continue;
+      var v=obj[k];
+      if(v==null) continue;
+      try{ localStorage.setItem(k, String(v)); n++; }catch(e){}
+    }
+    return n;
+  }
 
   document.getElementById('btn-restore').addEventListener('click', function(){
     document.getElementById('restore-file').click();
@@ -2277,9 +2307,18 @@
           partDefs=obj.partDefs.filter(function(x){ return x && x.id; });
           saveParts(); renderPartList(); renderPartInputs();
         }
-        save(); render();
+        save();
+        // version:3 以降は全設定（移動平均・上乗せ・基準額・元本・レート・色・表示状態など）を含む。
+        // 反映漏れが出ないよう、書き戻したあとに読み込み直す。
+        var applied = applySettings(obj.settings);
+        if(applied>0){
+          alert(data.length+'件の記録と'+applied+'項目の設定を復元しました。\n画面を読み込み直します。');
+          location.reload();
+          return;
+        }
+        render();
         var note=document.getElementById('tools-note');
-        note.textContent = data.length+'件を読み込みました。';
+        note.textContent = data.length+'件を読み込みました。（この控えには設定が入っていません）';
       }catch(e){
         var note=document.getElementById('tools-note');
         note.textContent = '読み込めませんでした（'+e.message+'）。';
