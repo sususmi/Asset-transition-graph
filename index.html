@@ -18,28 +18,28 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;
     line-height:1.6; -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:760px; margin:0 auto; padding:24px 16px 48px;}
-  .head{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px;}
+  .wrap{max-width:760px; margin:0 auto; padding:18px 16px 40px;}
+  .head{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:10px;}
   h1{font-size:22px; font-weight:600; margin:0 0 4px;}
   .sub{font-size:13px; color:var(--text-sub); margin:0;}
-  .colorbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:24px;}
-  .opacitybar{display:flex; flex-wrap:wrap; gap:18px; align-items:center; margin:0 0 24px;}
-  .opac{display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--text-sub);}
-  .opac input[type=range]{width:110px; accent-color:var(--accent); cursor:pointer;}
-  .opac .opac-val{min-width:38px; text-align:right; font-variant-numeric:tabular-nums; color:var(--text);}
-  .col{display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 10px 0 8px;
+  .colorbar{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px;}
+  .opacitybar{display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin:0 0 10px;}
+  .opac{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-sub);}
+  .opac input[type=range]{width:84px; height:14px; accent-color:var(--accent); cursor:pointer;}
+  .opac .opac-val{min-width:32px; text-align:right; font-variant-numeric:tabular-nums; color:var(--text);}
+  .col{display:inline-flex; align-items:center; gap:5px; height:29px; padding:0 9px 0 7px;
     background:var(--surface); border:1px solid var(--border); border-radius:18px;
-    font-size:13px; color:var(--text-sub); cursor:pointer; position:relative;}
+    font-size:12.5px; color:var(--text-sub); cursor:pointer; position:relative;}
   .col-sw{width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.15);}
   #sw-accent{background:var(--accent);} #sw-plus{background:var(--plus);}
   #sw-minus{background:var(--minus);} #sw-bg{background:var(--bg);}
   .col input[type=color]{position:absolute; inset:0; opacity:0; width:100%; height:100%; cursor:pointer; border:none;}
   .col-reset{height:34px; padding:0 12px; font-size:13px; font-weight:400;
     background:transparent; color:var(--text-sub); border:1px solid var(--border); border-radius:18px;}
-  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px; margin-bottom:20px;}
-  .stat{background:var(--surface-2); border-radius:var(--radius); padding:14px 16px;}
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin-bottom:12px;}
+  .stat{background:var(--surface-2); border-radius:var(--radius); padding:11px 13px;}
   .stat .label{font-size:12px; color:var(--text-sub); margin-bottom:4px;}
-  .stat .val{font-size:22px; font-weight:600;}
+  .stat .val{font-size:21px; font-weight:600;}
   .stat .val small{font-size:13px; font-weight:500; color:var(--text-sub); margin-left:4px;}
   .cmp-tabs{display:flex; gap:3px; margin-bottom:6px; flex-wrap:nowrap;}
   .cmp-tab{flex:1 1 0; min-width:0; height:24px; padding:0 3px; font-size:10.5px; font-weight:400;
@@ -91,7 +91,7 @@
     padding:10px 12px; margin:0 0 14px; font-size:13px; line-height:1.6; color:var(--text);}
   .save-warn.on{display:block;}
   .save-warn b{color:var(--minus);}
-  .settings-section{margin:20px 0; padding-top:16px; border-top:1px solid var(--border);}
+  .settings-section{margin:14px 0; padding-top:12px; border-top:1px solid var(--border);}
   .add-pos{display:inline-flex; gap:0; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;}
   .add-pos-btn{height:34px; padding:0 10px; font-size:12px; font-weight:400; background:transparent;
     color:var(--text-sub); border:none; border-radius:0;}
@@ -122,18 +122,18 @@
     background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius);
     font-family:inherit; outline:none;}
   input:focus,textarea:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(42,120,214,.12);}
-  button{height:38px; padding:0 16px; font-size:14px; font-weight:500; cursor:pointer;
+  button{height:34px; padding:0 13px; font-size:13.5px; font-weight:500; cursor:pointer;
     background:var(--text); color:var(--bg); border:none; border-radius:var(--radius);
     font-family:inherit; white-space:nowrap;}
   button:active{transform:scale(.98);}
   .bulk-toggle{background:transparent; color:var(--accent); border:1px solid var(--border);
-    font-weight:400; font-size:13px; height:34px; padding:0 14px; border-radius:var(--radius);
+    font-weight:400; font-size:12.5px; height:30px; padding:0 12px; border-radius:var(--radius);
     white-space:nowrap;}
   .bulk-toggle:hover{background:var(--surface-2);}
   .settings-group{margin-bottom:14px;}
   .settings-group-title{font-size:11px; font-weight:600; color:var(--text-muted);
     letter-spacing:.04em; margin-bottom:7px; text-transform:none;}
-  .settings-toggles{display:flex; flex-wrap:wrap; gap:8px;}
+  .settings-toggles{display:flex; flex-wrap:wrap; gap:6px;}
   .bulk{display:none; background:var(--surface); border:1px solid var(--border);
     border-radius:12px; padding:16px; margin-bottom:14px;}
   .bulk.open{display:block;}
@@ -158,19 +158,24 @@
   .range-dates{display:flex; align-items:center; gap:6px;}
   .range-dates input{width:145px; height:32px; font-size:13px;}
   .tilde{color:var(--text-muted); font-size:13px;}
-  .legend{display:flex; flex-wrap:wrap; gap:16px; margin-bottom:8px; font-size:12px; color:var(--text-sub);}
-  .axismode{display:flex; align-items:center; gap:6px; margin-bottom:14px; flex-wrap:wrap;}
+  .legend{display:flex; flex-wrap:wrap; gap:14px; margin-bottom:6px; font-size:12px; color:var(--text-sub);}
+  .axismode{display:flex; align-items:center; gap:5px; margin:0 0 12px; flex-wrap:wrap;}
   .axismode-label{font-size:12px; color:var(--text-muted);}
-  .axm-btn{height:28px; padding:0 12px; font-size:12px; font-weight:400; background:transparent;
+  .axm-btn{height:26px; padding:0 10px; font-size:11.5px; font-weight:400; background:transparent;
     color:var(--text-sub); border:1px solid var(--border); border-radius:14px; cursor:pointer;}
   .axm-btn.active{background:var(--accent); color:#fff; border-color:var(--accent);}
   .axm-btn:disabled{opacity:.4; cursor:default;}
   .legend span{display:flex; align-items:center; gap:5px;}
   .dot{width:10px; height:10px; border-radius:2px;}
   .line-dot{width:16px; height:3px; border-radius:2px;}
-  .chart-box{position:relative; width:100%; height:var(--chart-h,380px); margin-bottom:24px;
+  .chart-box{position:relative; width:100%; height:var(--chart-h,380px); margin-bottom:10px;
     background:var(--surface); border:1px solid var(--border); border-radius:12px;
-    padding:12px 12px 18px; min-height:220px;}
+    padding:12px 12px 20px; min-height:240px;
+    display:flex; flex-direction:column;}
+  .chart-box canvas{flex:1 1 auto; min-height:0;}
+  /* グラフの中に入れた期間スライダー */
+  .chart-box .rangeslider{flex:0 0 auto; margin:2px 0 0; padding:0;
+    background:transparent; border:none;}
   /* キーボード操作中であることが分かるように枠を濃くする */
   .chart-box:focus-within{ box-shadow: inset 0 0 0 1px var(--text); }
   #chart:focus{ outline:none; }
@@ -223,9 +228,9 @@
   .pe-row .pe-total{margin-left:auto; font-weight:600; font-variant-numeric:tabular-nums;}
   .pe-row .pe-total.diff{color:var(--minus);}
   .pe-note{font-size:12px; color:var(--text-muted); padding:4px 12px 0;}
-  .tools{display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:16px;}
+  .tools{display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; margin-top:12px;}
   .tools button{background:transparent; color:var(--text-sub); border:1px solid var(--border);
-    font-weight:400; font-size:13px;}
+    font-weight:400; font-size:12.5px; height:30px; padding:0 11px;}
   .tools-note{font-size:12px; color:var(--text-muted); text-align:right; margin:8px 0 0;}
 
   /* --- 全画面ボタン --- */
@@ -246,7 +251,7 @@
   @supports (height:100dvh){ .chart-box.fs-fake{height:100dvh !important;} }
   .chart-box.fs-fake canvas{flex:1; min-height:0;}
   .chart-box.fs-fake .chart-resize{display:none;}
-  .chart-box.fs-fake .rangeslider.rs-in-fs{margin:12px 0 0; flex:0 0 auto;}
+  .chart-box.fs-fake .rangeslider{margin:10px 0 0;}
   body.fs-lock{overflow:hidden;}
 
   /* --- 年月日クイックピッカー --- */
@@ -259,13 +264,13 @@
   .qp-panel.open{display:block;}
 
   /* --- 期間スライダー --- */
-  .rangeslider{margin:0 0 24px; padding:14px 16px 10px; background:var(--surface);
+  .rangeslider{margin:0 0 16px; padding:10px 12px 6px; background:var(--surface);
     border:1px solid var(--border); border-radius:12px;}
   .rs-labels{display:flex; justify-content:space-between; align-items:center;
-    font-size:13px; color:var(--text-sub); margin-bottom:12px; gap:8px;}
+    font-size:12px; color:var(--text-sub); margin-bottom:2px; gap:8px;}
   .rs-labels #rs-from-label, .rs-labels #rs-to-label{font-weight:600; color:var(--text); white-space:nowrap;}
   .rs-hint{font-size:11px; color:var(--text-muted); font-weight:400;}
-  .rs-track{position:relative; height:8px; margin:14px 12px; background:var(--surface-2);
+  .rs-track{position:relative; height:8px; margin:12px 12px 8px; background:var(--surface-2);
     border:1px solid var(--border); border-radius:6px;}
   .rs-fill{position:absolute; top:0; bottom:0; background:var(--accent); opacity:.28; border-radius:6px;}
   .rs-handle{position:absolute; top:50%; width:22px; height:22px; margin-left:-11px;
@@ -274,12 +279,11 @@
   .rs-handle:active{cursor:grabbing;}
   .rs-handle:focus{outline:none; box-shadow:0 0 0 5px rgba(42,120,214,.35); width:26px; height:26px; margin-left:-13px;}
   .rs-handle.rs-active{box-shadow:0 0 0 5px rgba(42,120,214,.35);}
-  .rs-actions{display:flex; justify-content:flex-end; margin-top:4px;}
-  .rs-reset{height:30px; padding:0 12px; font-size:12px; background:transparent;
-    color:var(--text-sub); border:1px solid var(--border); border-radius:var(--radius);}
-  /* 全画面のグラフ内に入れたスライダー */
-  .chart-box:fullscreen .rangeslider.rs-in-fs{margin:12px 0 0; flex:0 0 auto;}
-  .chart-box:-webkit-full-screen .rangeslider.rs-in-fs{margin:12px 0 0;}
+  .rs-reset{height:24px; padding:0 10px; font-size:11px; background:transparent;
+    color:var(--text-muted); border:1px solid var(--border); border-radius:12px; cursor:pointer;}
+  .rs-reset:hover{color:var(--text); border-color:var(--text-sub);}
+  .chart-box:fullscreen .rangeslider{margin:10px 0 0;}
+  .chart-box:-webkit-full-screen .rangeslider{margin:10px 0 0;}
 
   /* --- ホイール日付ピッカー --- */
   .wheeldate{display:inline-flex; gap:6px; align-items:stretch;}
@@ -305,8 +309,8 @@
   .qp-clear{height:34px; padding:0 12px; font-size:13px; background:transparent; color:var(--text-sub); border:1px solid var(--border);}
   .qp-hint{font-size:12px; color:var(--text-muted);}
 
-  /* --- 表示切替（両方 / 資産のみ / 損益のみ） --- */  .viewmode{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;}
-  .vm-btn{height:32px; padding:0 14px; font-size:13px; font-weight:400;
+  /* --- 表示切替（両方 / 資産のみ / 損益のみ） --- */  .viewmode{display:flex; gap:5px; flex-wrap:wrap; margin-bottom:8px;}
+  .vm-btn{height:29px; padding:0 11px; font-size:12.5px; font-weight:400;
     background:transparent; color:var(--text-sub); border:1px solid var(--border); border-radius:18px;}
   .vm-btn.active{background:var(--accent); color:#fff; border-color:var(--accent);}
   .vm-btn.vm-group{border-color:var(--text); color:var(--text); margin-left:6px;}
@@ -412,9 +416,8 @@
 
   <div class="viewmode" id="viewmode">
     <button class="vm-btn active" id="btn-both" data-both="pnl" title="タップするたび 資産＋損益 ⇄ 資産＋増減 と切り替わります"><i class="sw-mark">⇄</i>資産＋損益</button>
-    <button class="vm-btn" id="btn-only" data-only="asset" title="タップするたび 資産推移のみ ⇄ 損益のみ と切り替わります"><i class="sw-mark">⇄</i>資産推移のみ</button>
-    <button class="vm-btn" data-mode="cumpnl">損益合計推移</button>
-    <button class="vm-btn" data-mode="delta">資産増減のみ</button>
+    <button class="vm-btn" id="btn-only" data-only="asset" title="タップするたび 資産推移のみ → 損益のみ → 資産増減のみ と切り替わります"><i class="sw-mark">⇄</i>資産推移のみ</button>
+    <button class="vm-btn" id="btn-cum" data-cum="pnl" title="タップするたび 損益合計推移 ⇄ 資産増減合計 と切り替わります"><i class="sw-mark">⇄</i>損益合計推移</button>
     <button class="vm-btn" data-mode="parts">内訳のみ</button>
     <button class="vm-btn vm-group" id="btn-group" title="タップするたび 入力事項通り → 月ごと → 年ごと と切り替わります">入力事項通り</button>
   </div>
@@ -425,31 +428,27 @@
     <span id="legend-delta" style="display:contents;"></span>
     <span id="legend-parts" style="display:contents;"></span>
   </div>
+  <div class="chart-box" id="chart-box">
+    <button class="chart-fs" id="btn-fs" title="全画面表示">⛶ 全画面</button>
+    <canvas id="chart" tabindex="0" role="img" aria-label="資産推移の折れ線と損益の棒を重ねたグラフ（クリックして矢印キーやA/Dで点を移動）">資産と損益データ</canvas>
+    <div class="rangeslider" id="rangeslider">
+      <div class="rs-labels">
+        <span id="rs-from-label">—</span>
+        <button class="rs-reset" id="rs-reset">全期間に戻す</button>
+        <span id="rs-to-label">—</span>
+      </div>
+      <div class="rs-track" id="rs-track">
+        <div class="rs-fill" id="rs-fill"></div>
+        <div class="rs-handle" id="rs-handle-from" tabindex="0" role="slider" aria-label="開始"></div>
+        <div class="rs-handle" id="rs-handle-to" tabindex="0" role="slider" aria-label="終了"></div>
+      </div>
+    </div>
+    <div class="chart-resize" id="chart-resize" title="ドラッグで高さを変更"></div>
+  </div>
   <div class="axismode" id="axismode">
     <span class="axismode-label">ゼロ基準：</span>
     <button class="axm-btn active" data-axm="fit" title="損益の棒を見やすい大きさに拡大して表示します（資産とは別の縮尺）">損益拡大</button>
     <button class="axm-btn" data-axm="real" title="資産の増減と損益を同じ縮尺で表示します（同じ1円が同じ高さ）">同じ縮尺</button>
-  </div>
-  <div class="chart-box" id="chart-box">
-    <button class="chart-fs" id="btn-fs" title="全画面表示">⛶ 全画面</button>
-    <canvas id="chart" tabindex="0" role="img" aria-label="資産推移の折れ線と損益の棒を重ねたグラフ（クリックして矢印キーやA/Dで点を移動）">資産と損益データ</canvas>
-    <div class="chart-resize" id="chart-resize" title="ドラッグで高さを変更"></div>
-  </div>
-
-  <div class="rangeslider" id="rangeslider">
-    <div class="rs-labels">
-      <span id="rs-from-label">—</span>
-      <span class="rs-hint">つまみをドラッグで期間を選択</span>
-      <span id="rs-to-label">—</span>
-    </div>
-    <div class="rs-track" id="rs-track">
-      <div class="rs-fill" id="rs-fill"></div>
-      <div class="rs-handle" id="rs-handle-from" tabindex="0" role="slider" aria-label="開始"></div>
-      <div class="rs-handle" id="rs-handle-to" tabindex="0" role="slider" aria-label="終了"></div>
-    </div>
-    <div class="rs-actions">
-      <button class="rs-reset" id="rs-reset">全期間に戻す</button>
-    </div>
   </div>
 
   <div class="settings-section">
@@ -976,7 +975,7 @@
     if(!view.length){
       cEl.textContent='—'; cEl.style.color='var(--text)'; cNote.textContent=''; return;
     }
-    var isCum = (viewMode === 'cumpnl');
+    var isCum = (viewMode === 'cumpnl' || viewMode === 'cumdelta');
     var r = isCum ? computeCumCompare(view, idx, compareModes[slot])
                   : computeCompare(view, idx, compareModes[slot]);
     var current = isCum ? cumRawData[idx] : curVal;
@@ -1445,8 +1444,24 @@
     var axisGray = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#8a8a82';
 
     // 損益合計推移モード：累積損益の棒グラフのみ
-    if(viewMode === 'cumpnl'){
-      var cumColors = cumPnls.map(function(v){ return v==null?'transparent':hexToRgba(v>=0?PLUS:MINUS, opacity.pnl); });
+    if(viewMode === 'cumpnl' || viewMode === 'cumdelta'){
+      var isCumD = (viewMode === 'cumdelta');
+      // 資産増減の合計＝最初の月末からの資産の増減。月末の点にだけ出す。
+      function cumDeltaOf(arr){
+        var out=[], base=null;
+        for(var ci=0; ci<arr.length; ci++){
+          if(!monthEnd[ci] || arr[ci]==null || isNaN(arr[ci])){ out.push(null); continue; }
+          if(base==null){ base=arr[ci]; out.push(null); continue; }
+          out.push(arr[ci]-base);
+        }
+        return out;
+      }
+      var cumLbl = isCumD ? '資産増減 合計' : '損益合計';
+      var cumP   = isCumD ? cumDeltaOf(values)    : cumPnls;
+      var cumR   = isCumD ? cumDeltaOf(rawValues) : cumRawPnls;
+      var cumPos = isCumD ? DELTA_PLUS  : PLUS;
+      var cumNeg = isCumD ? DELTA_MINUS : MINUS;
+      var cumColors = cumP.map(function(v){ return v==null?'transparent':hexToRgba(v>=0?cumPos:cumNeg, opacity.pnl); });
       var cumScales = {
         x: useMonthX ? monthXScale(axisGray) :
            { ticks:{ color:axisGray, autoSkip:false, maxRotation:0, font:{size:11},
@@ -1467,11 +1482,11 @@
             return compactNum(v);
           } },
           grid:{ color:'rgba(150,150,140,0.15)' },
-          title:{ display:true, text:usdOn?'損益合計($)':'損益合計', color:axisGray, font:{size:11} } }
+          title:{ display:true, text:(cumLbl+(usdOn?'($)':'')), color:axisGray, font:{size:11} } }
       };
       chart = new Chart(ctx, {
         plugins:[selMarker],
-        data:{ labels:((useTimeX||useMonthX)?undefined:labels), datasets:[{ type:'bar', label:'損益合計', data:toBarXY(atMonthEnd(cumPnls)), yAxisID:'yCum',
+        data:{ labels:((useTimeX||useMonthX)?undefined:labels), datasets:[{ type:'bar', label:cumLbl, data:toBarXY(atMonthEnd(cumP)), yAxisID:'yCum',
           backgroundColor:cumColors, borderRadius:4, borderSkipped:false,
           maxBarThickness:24, barThickness:barWidth(1) }] },
         options:{
@@ -1491,8 +1506,9 @@
               label:function(c){
                 var i=c.dataIndex;
                 var yr=(fullDates[i]||'').slice(0,4);
-                if(blurOn) return '損益合計: '+(usdOn?'$':'¥')+'•••';
-                return '損益合計: '+fmtCurSigned(cumRawPnls[i], yr);
+                if(blurOn) return cumLbl+': '+(usdOn?'$':'¥')+'•••';
+                if(cumR[i]==null) return cumLbl+': —';
+                return cumLbl+': '+fmtCurSigned(cumR[i], yr);
               }
             }}
           },
@@ -2495,7 +2511,7 @@
   /* ===== 表示切替（両方 / 資産のみ / 損益のみ） ===== */
   // 表示モードの選択状態を1つのボタンに集約する
   function setActiveVm(btn){
-    document.querySelectorAll('.vm-btn[data-mode], #btn-only, #btn-both').forEach(function(x){ x.classList.remove('active'); });
+    document.querySelectorAll('.vm-btn[data-mode], #btn-only, #btn-both, #btn-cum').forEach(function(x){ x.classList.remove('active'); });
     if(btn) btn.classList.add('active');
   }
   // ラベルの前に切替マークを付ける
@@ -2532,10 +2548,16 @@
       render();
     });
   }
-  // 資産推移のみ ⇄ 損益のみ
+  // 資産推移のみ → 損益のみ → 資産増減のみ
   bindToggleBtn('btn-only', 'data-only', [
     { key:'asset', mode:'asset', label:'資産推移のみ' },
-    { key:'pnl',   mode:'pnl',   label:'損益のみ' }
+    { key:'pnl',   mode:'pnl',   label:'損益のみ' },
+    { key:'delta', mode:'delta', label:'資産増減のみ' }
+  ]);
+  // 損益合計推移 ⇄ 資産増減合計
+  bindToggleBtn('btn-cum', 'data-cum', [
+    { key:'pnl',   mode:'cumpnl',   label:'損益合計推移' },
+    { key:'delta', mode:'cumdelta', label:'資産増減合計' }
   ]);
   // 資産＋損益 ⇄ 資産＋増減
   bindToggleBtn('btn-both', 'data-both', [
@@ -2855,8 +2877,6 @@
   (function(){
     var box=document.getElementById('chart-box');
     var btn=document.getElementById('btn-fs');
-    var slider=document.getElementById('rangeslider');
-    var sliderHome=null; // 元の位置を覚えるためのプレースホルダ
     function nativeFs(){ return document.fullscreenElement || document.webkitFullscreenElement; }
     function isFs(){ return nativeFs() || box.classList.contains('fs-fake'); }
     var reqFs = box.requestFullscreen || box.webkitRequestFullscreen;
@@ -2885,23 +2905,7 @@
     function onChange(){
       var fs=isFs();
       btn.textContent = fs ? '✕ 閉じる' : '⛶ 全画面';
-      if(fs){
-        // スライダーを全画面のグラフ内へ移動して操作できるように
-        if(slider && !sliderHome){
-          sliderHome=document.createComment('rs-home');
-          slider.parentNode.insertBefore(sliderHome, slider);
-          box.appendChild(slider);
-          slider.classList.add('rs-in-fs');
-        }
-      } else {
-        // 元の位置へ戻す
-        if(slider && sliderHome){
-          sliderHome.parentNode.insertBefore(slider, sliderHome);
-          sliderHome.parentNode.removeChild(sliderHome);
-          sliderHome=null;
-          slider.classList.remove('rs-in-fs');
-        }
-      }
+      // スライダーは常にグラフ内にあるので、全画面でも移動は不要
       if(chart) setTimeout(function(){ chart.resize(); render(); }, 60);
     }
     document.addEventListener('fullscreenchange', onChange);
