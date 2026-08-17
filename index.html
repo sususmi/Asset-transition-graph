@@ -411,7 +411,7 @@
     <button class="vm-btn" data-mode="pnl">損益のみ</button>
     <button class="vm-btn" data-mode="cumpnl">損益合計推移</button>
     <button class="vm-btn" data-mode="parts">内訳のみ</button>
-    <button class="vm-btn vm-group" id="btn-group" title="タップするたび 月ごと ⇄ 年ごと と切り替わります">月ごと</button>
+    <button class="vm-btn vm-group" id="btn-group" title="タップするたび 入力事項通り → 月ごと → 年ごと と切り替わります">入力事項通り</button>
   </div>
   <div class="legend">
     <span><span class="line-dot" style="background:var(--accent)"></span>資産推移</span>
@@ -611,9 +611,9 @@
   var maList = [{ period:5, on:true }]; // 移動平均線 [{period:N, on:bool}]
   var MA_COLORS = ['#e8a13a','#7a5cd0','#2fae6b','#d0587a','#3aa0e8']; // MA線の色
   var GROUP_KEY = 'asset_tracker_group_v1';
-  var groupMode = 'month'; // 'month' | 'year'
-  var GROUP_LABEL = { month:'月ごと', year:'年ごと' };
-  var GROUP_ORDER = ['month','year'];
+  var groupMode = 'raw'; // 'raw'（入力事項通り）| 'month' | 'year'
+  var GROUP_LABEL = { raw:'入力事項通り', month:'月ごと', year:'年ごと' };
+  var GROUP_ORDER = ['raw','month','year'];
   var viewRaw = []; // まとめる前の表示中データ（内訳編集はこちらを使う）
   var PART_KEY = 'asset_tracker_parts_v1';
   var partDefs = []; // 資産の内訳 [{id, name, color, on}]  on=グラフに線を出すか
@@ -854,13 +854,14 @@
   function loadGroup(){
     try{
       var g=localStorage.getItem(GROUP_KEY);
-      groupMode = (g && GROUP_LABEL[g]) ? g : 'month'; // 旧 'raw' は月ごとに寄せる
-    }catch(e){ groupMode='month'; }
+      groupMode = (g && GROUP_LABEL[g]) ? g : 'raw';
+    }catch(e){ groupMode='raw'; }
   }
   function saveGroup(){ try{ localStorage.setItem(GROUP_KEY, groupMode); }catch(e){} }
   // 月ごと／年ごと：その期間で最後に記録された1件を、そのまま点にする。
   // 値を合成しないので、点の中身は記録一覧の行とそっくり同じになる。
   function groupView(view){
+    if(groupMode==='raw') return view; // 入力事項通り：記録をそのまま並べる
     var cut = (groupMode==='year') ? 4 : 7;
     var keys=[], map={};
     view.forEach(function(d){
@@ -1023,8 +1024,9 @@
 
     var labels = view.map(function(d){
       var p = d.date.split('-');
-      if(groupMode==='year') return p[0];
-      return p[1]; // 月ごと：月だけ。年は軸側が区切りで出す
+      if(groupMode==='year')  return p[0];
+      if(groupMode==='month') return p[1]; // 月だけ。年は軸側が区切りで出す
+      return p[1] + '/' + p[2];            // 入力事項通り
     });
     var years = view.map(function(d){ return d.date.slice(0,4); });
     var fullDates = view.map(function(d){ return d.date; });
