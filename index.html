@@ -1249,9 +1249,22 @@
   }
 
   // 日付を数値（1970-01-01からの日数）に変換
-  function dayNum(ymd){
+  // 日付を「月の通し番号＋その月の中での進み具合」に変換する。
+  // 毎月1日がちょうど整数になるので、月境界どうしの間隔は必ず等しくなる。
+  // 28日の2月も31日の1月も同じ幅として扱われ、日付は月内で比例配置される。
+  function monthPos(ymd){
     var p=String(ymd).split('-');
-    return Math.round(Date.UTC(+p[0], +p[1]-1, +p[2]) / 86400000);
+    var y=+p[0], m=+p[1], d=+p[2];
+    var dim=new Date(Date.UTC(y, m, 0)).getUTCDate(); // その月の日数
+    // 1日→0.0、月末→1.0 に写す。月末が28日でも31日でも同じ位置になるので、
+    // 損益の棒（月境界に置く）と月末の点がぴったり重なる。
+    var frac = (dim>1) ? (d-1)/(dim-1) : 0;
+    return y*12 + (m-1) + frac;
+  }
+  // その月の終わり＝翌月1日の位置
+  function monthEndPos(ymd){
+    var p=String(ymd).split('-');
+    return (+p[0])*12 + (+p[1]);
   }
   function drawChart(labels, values, pnls, years, fullDates, rawValues, rawPnls, cumPnls, cumRawPnls, yearCumRawPnls){
     // 「入力事項通り」のときは、点の横位置を日付の間隔どおりに置く。
@@ -1260,12 +1273,15 @@
     var lineShown = (viewMode==='both' || viewMode==='bothdelta' || viewMode==='asset' || viewMode==='parts');
     var useTimeX  = isRaw && lineShown && viewMode!=='cumpnl'; // 線を日付の位置に置く
     var useMonthX = isRaw && !useTimeX;                        // 棒だけの表示 → 月の軸を表に出す
-    var xvals=[], xMin=0, xMax=1, xPad=0, showTick=[];
+    var xvals=[], barXvals=[], xMin=0, xMax=1, xPad=0, showTick=[];
     if(useTimeX){
-      xvals = fullDates.map(dayNum);
-      var span = xvals[xvals.length-1] - xvals[0];
-      xPad = Math.max(Math.round(span*0.03), 5);
-      xMin = xvals[0]-xPad; xMax = xvals[xvals.length-1]+xPad;
+      xvals    = fullDates.map(monthPos);     // 線はその日の位置
+      barXvals = fullDates.map(monthEndPos);  // 棒はその月の終わり（翌月1日）に固定
+      var lastBar = barXvals.length ? Math.max.apply(null, barXvals) : 0;
+      var right = Math.max(xvals[xvals.length-1], lastBar);
+      var span = right - xvals[0];
+      xPad = Math.max(span*0.03, 0.2);
+      xMin = xvals[0]-xPad; xMax = right+xPad;
       // ラベルは詰まりすぎないよう、実距離で間引く（年の変わり目は必ず出す）
       var minSep = (span>0 ? span : 1)/13;
       var lastShown = -Infinity;
@@ -1320,7 +1336,9 @@
     //  線がある表示 … その月の最後の記録の日付に合わせる（上の点と縦位置が揃う）
     //  棒だけの表示 … 揃える相手がいないので月の通し番号で等間隔に置く
     function toBarXY(arr){
-      if(useTimeX) return toXY(arr);
+      if(useTimeX){
+        return arr.map(function(v,i){ return { x:barXvals[i], y:((v==null||isNaN(v)) ? null : v) }; });
+      }
       if(!useMonthX) return arr;
       return arr.map(function(v,i){ return { x:monthIdx[i], y:((v==null||isNaN(v)) ? null : v) }; });
     }
@@ -1360,9 +1378,14 @@
       }
     };
     function barWidth(nSets){
-      if(useTimeX)  return Math.min(24, barPx(nSets, monthEnd));
       if(useMonthX) return barPxIdx(nSets);
-      return undefined;
+      if(!useTimeX) return undefined;
+      // 棒は必ず1ヶ月間隔で並ぶので、1ヶ月あたりの幅から決める
+      var box=document.getElementById('chart-box');
+      var w=(box && box.clientWidth) ? box.clientWidth : 700;
+      var plot=Math.max(60, w-80);
+      var pxPerMonth = plot/Math.max(0.001, xMax-xMin);
+      return Math.max(4, Math.min(24, Math.floor(pxPerMonth*0.7/Math.max(1, nSets||1))));
     }
     function barPxIdx(nSets){
       var box=document.getElementById('chart-box');
