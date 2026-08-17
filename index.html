@@ -66,6 +66,13 @@
   .boost-toggle-sw .sw-label{font-size:12px; color:var(--text-sub);}
   .ma-item input.ma-period-in{width:80px; height:34px; text-align:center;}
   .part-item input.part-name-in{flex:1; min-width:110px; height:34px;}
+  .pt-ord{display:flex; flex-direction:column; gap:2px; flex:0 0 auto;}
+  .pt-ord button{width:26px; height:16px; padding:0; font-size:9px; line-height:1;
+    border:1px solid var(--border); background:transparent; color:var(--text-sub);
+    border-radius:3px; cursor:pointer;}
+  .pt-ord button:disabled{opacity:.25; cursor:default;}
+  .pt-sw{display:flex; align-items:center; gap:4px; flex:0 0 auto;}
+  .pt-sw em{font-style:normal; font-size:11px; color:var(--text-muted);}
   .part-item .part-sw{width:16px; height:16px; border-radius:3px; flex:0 0 auto;
     border:1px solid rgba(0,0,0,.15); position:relative; cursor:pointer;}
   .part-item .part-sw input[type=color]{position:absolute; inset:0; opacity:0;
@@ -404,7 +411,7 @@
     <button class="vm-btn" data-mode="pnl">損益のみ</button>
     <button class="vm-btn" data-mode="cumpnl">損益合計推移</button>
     <button class="vm-btn" data-mode="parts">内訳のみ</button>
-    <button class="vm-btn vm-group" id="btn-group" title="タップするたび 入力事項通り → 月ごと → 年ごと と切り替わります">入力事項通り</button>
+    <button class="vm-btn vm-group" id="btn-group" title="タップするたび 月ごと ⇄ 年ごと と切り替わります">月ごと</button>
   </div>
   <div class="legend">
     <span><span class="line-dot" style="background:var(--accent)"></span>資産推移</span>
@@ -604,9 +611,9 @@
   var maList = [{ period:5, on:true }]; // 移動平均線 [{period:N, on:bool}]
   var MA_COLORS = ['#e8a13a','#7a5cd0','#2fae6b','#d0587a','#3aa0e8']; // MA線の色
   var GROUP_KEY = 'asset_tracker_group_v1';
-  var groupMode = 'raw'; // 'raw'（入力事項通り）| 'month' | 'year'
-  var GROUP_LABEL = { raw:'入力事項通り', month:'月ごと', year:'年ごと' };
-  var GROUP_ORDER = ['raw','month','year'];
+  var groupMode = 'month'; // 'month' | 'year'
+  var GROUP_LABEL = { month:'月ごと', year:'年ごと' };
+  var GROUP_ORDER = ['month','year'];
   var viewRaw = []; // まとめる前の表示中データ（内訳編集はこちらを使う）
   var PART_KEY = 'asset_tracker_parts_v1';
   var partDefs = []; // 資産の内訳 [{id, name, color, on}]  on=グラフに線を出すか
@@ -835,27 +842,55 @@
       var s=localStorage.getItem(PART_KEY);
       if(s){ var a=JSON.parse(s); if(Array.isArray(a)) partDefs=a; }
     }catch(e){}
-    // 旧データ保護：id が無い定義には振り直す
-    partDefs.forEach(function(pd,i){ if(!pd.id) pd.id='p'+i+'_'+Date.now(); });
+    partDefs.forEach(function(pd,i){
+      if(!pd.id) pd.id='p'+i+'_'+Date.now();
+      // 旧仕様の on ひとつを、線表示(line)と詳細表示(tip)に分ける
+      if(pd.line===undefined) pd.line = (pd.on===undefined ? true : !!pd.on);
+      if(pd.tip===undefined)  pd.tip  = (pd.on===undefined ? true : !!pd.on);
+      delete pd.on;
+    });
   }
   function saveParts(){ try{ localStorage.setItem(PART_KEY, JSON.stringify(partDefs)); }catch(e){} }
   function loadGroup(){
-    try{ var g=localStorage.getItem(GROUP_KEY); if(g && GROUP_LABEL[g]) groupMode=g; }catch(e){}
+    try{
+      var g=localStorage.getItem(GROUP_KEY);
+      groupMode = (g && GROUP_LABEL[g]) ? g : 'month'; // 旧 'raw' は月ごとに寄せる
+    }catch(e){ groupMode='month'; }
   }
   function saveGroup(){ try{ localStorage.setItem(GROUP_KEY, groupMode); }catch(e){} }
-  // 月ごと／年ごとにまとめる。
-  // 資産と内訳はストック（残高）なので「その期間の最後の記録」を代表にする。
-  // 損益はフロー（増減）なので期間内を合計する。
+  // 月ごと／年ごと：その期間で最後に記録された1件を、そのまま点にする。
+  // 値を合成しないので、点の中身は記録一覧の行とそっくり同じになる。
   function groupView(view){
-    if(groupMode==='raw') return view;
-    var cut = (groupMode==='month') ? 7 : 4;
-    var out=[], map={};
+    var cut = (groupMode==='year') ? 4 : 7;
+    var keys=[], map={};
     view.forEach(function(d){
       var k=d.date.slice(0,cut);
-      if(!map[k]){ map[k]={ date:d.date, value:d.value, pnl:null, parts:d.parts }; out.push(map[k]); }
-      var b=map[k];
-      if(d.date>=b.date){ b.date=d.date; b.value=d.value; b.parts=d.parts; }
-      if(d.pnl!=null) b.pnl=(b.pnl==null?0:b.pnl)+d.pnl;
+      if(!map[k]){ keys.push(k); map[k]=d; }
+      else if(d.date >= map[k].date){ map[k]=d; }
+    });
+    return keys.map(function(k){ return map[k]; });
+  }
+  // 累積損益は「まとめる前の全記録」を積み上げて、各点の日付時点の値にする。
+  // 点を間引いても合計が目減りしないようにするため。
+  function cumUpTo(raw, view){
+    var out=[], run=0, ri=0;
+    view.forEach(function(b){
+      while(ri<raw.length && raw[ri].date<=b.date){ run += (raw[ri].pnl==null?0:raw[ri].pnl); ri++; }
+      out.push(run);
+    });
+    return out;
+  }
+  // 年初からの積み上げ（年合計）。同じく全記録ベース。
+  function yearCumUpTo(raw, view){
+    var out=[], run=0, curYr=null, ri=0;
+    view.forEach(function(b){
+      while(ri<raw.length && raw[ri].date<=b.date){
+        var y=raw[ri].date.slice(0,4);
+        if(y!==curYr){ curYr=y; run=0; }
+        run += (raw[ri].pnl==null?0:raw[ri].pnl);
+        ri++;
+      }
+      out.push(run);
     });
     return out;
   }
@@ -988,9 +1023,8 @@
 
     var labels = view.map(function(d){
       var p = d.date.split('-');
-      if(groupMode==='year')  return p[0];
-      if(groupMode==='month') return p[0].slice(2)+'/'+p[1];
-      return p[1] + '/' + p[2];
+      if(groupMode==='year') return p[0];
+      return p[1]; // 月ごと：月だけ。年は軸側が区切りで出す
     });
     var years = view.map(function(d){ return d.date.slice(0,4); });
     var fullDates = view.map(function(d){ return d.date; });
@@ -1005,19 +1039,10 @@
     }
 
     // 損益合計（累積）: 円ベースで積み上げ（未入力は0扱い）
-    var cumRaw = [];
-    var run = 0;
-    view.forEach(function(d){ run += (d.pnl==null ? 0 : d.pnl); cumRaw.push(run); });
+    var cumRaw = cumUpTo(rawView, view);
     cumRawData = cumRaw;
     // 年ごとの累計（年合計・その年の頭からの積み上げ）
-    var yearCumRaw = [];
-    var yrun = 0, curYr = null;
-    view.forEach(function(d){
-      var y=d.date.slice(0,4);
-      if(y!==curYr){ curYr=y; yrun=0; }
-      yrun += (d.pnl==null ? 0 : d.pnl);
-      yearCumRaw.push(yrun);
-    });
+    var yearCumRaw = yearCumUpTo(rawView, view);
     // 描画用（ドル表示ならその年のレートで換算）
     var cumPlot = cumRaw;
     if(usdOn){
@@ -1053,6 +1078,7 @@
     var html='';
     if(show){
       (series||partSeries()).forEach(function(ps){
+        if(!ps.line) return;
         html+='<span><span class="line-dot" style="background:'+escAttr(ps.color)+'"></span>'+escAttr(ps.name)+'</span>';
       });
     }
@@ -1148,7 +1174,7 @@
     var out=[];
     if(!viewData || !viewData.length) return out;
     partDefs.forEach(function(pd){
-      if(!pd.on) return;
+      if(!pd.line && !pd.tip) return;
       var any=false, raw=[];
       var arr=viewData.map(function(d){
         var v=(d.parts && d.parts[pd.id]!=null && !isNaN(d.parts[pd.id])) ? Number(d.parts[pd.id]) : null;
@@ -1159,7 +1185,8 @@
         return v;
       });
       if(!any) return; // 一度も入力がない内訳は線を出さない
-      out.push({ id:pd.id, name:(pd.name||'内訳'), color:pd.color, data:arr, raw:raw });
+      out.push({ id:pd.id, name:(pd.name||'内訳'), color:pd.color, data:arr, raw:raw,
+                 line:!!pd.line, tip:!!pd.tip });
     });
     return out;
   }
@@ -1264,6 +1291,17 @@
 
     // 集計単位に応じた比較の呼び名
     var prevLbl = (groupMode==='year') ? '前年比' : '前月比';
+    // 内訳1件分の詳細表示（線を出していなくても同じ文言で出す）
+    function partTipText(ps, i, yr){
+      var v=ps.raw[i];
+      if(v==null) return ps.name+': 未入力';
+      if(blurOn) return ps.name+': '+(usdOn?'$':'¥')+'•••';
+      var prev=null;
+      for(var j=i-1;j>=0;j--){ if(ps.raw[j]!=null){ prev=ps.raw[j]; break; } }
+      if(prev==null) return ps.name+': '+fmtCur(v, yr);
+      var df=v-prev, rt=prev!==0?(df/Math.abs(prev))*100:0;
+      return ps.name+': '+fmtCur(v, yr)+'  ('+prevLbl+' '+fmtCurSigned(df, yr)+' / '+pct(rt)+')';
+    }
     var showAsset = (viewMode === 'both' || viewMode === 'asset');
     var showPnl   = (viewMode === 'both' || viewMode === 'pnl');
     var showParts = (viewMode === 'both' || viewMode === 'asset' || viewMode === 'parts');
@@ -1309,6 +1347,7 @@
     if(showParts){
       // 資産の内訳（ONのものだけ・何本でも）
       pseries.forEach(function(ps){
+        if(!ps.line) return;
         datasets.push({ type:'line', label:ps.name, data:ps.data, yAxisID:'yAsset',
           partId: ps.id,
           borderColor: ps.color, backgroundColor:'transparent',
@@ -1347,6 +1386,7 @@
       // 内訳の線を出しているときは、その値も資産軸の範囲に入れる（下にはみ出して切れないように）
       if(showParts){
         pseries.forEach(function(ps){
+          if(!ps.line) return;
           ps.data.forEach(function(v){ if(v!=null && !isNaN(v)) av.push(v); });
         });
       }
@@ -1490,10 +1530,32 @@
         interaction:{ mode:'index', intersect:false },
         plugins:{
           legend:{ display:false },
-          tooltip:{ callbacks:{
+          tooltip:{
+            // 「詳細を表示」がOFFの内訳は小窓から外す
+            filter:function(item){
+              var pid=item.dataset && item.dataset.partId;
+              if(!pid) return true;
+              for(var fk=0; fk<pseries.length; fk++){
+                if(pseries[fk].id===pid) return !!pseries[fk].tip;
+              }
+              return true;
+            },
+            callbacks:{
             title:function(items){
               var i=items[0].dataIndex;
               return fullDates[i];
+            },
+            // 線を出していない内訳のうち、詳細ONのものをここで足す
+            afterBody:function(items){
+              if(!items || !items.length) return [];
+              var i=items[0].dataIndex;
+              var yr=(fullDates[i]||'').slice(0,4);
+              var extra=[];
+              pseries.forEach(function(ps){
+                if(!ps.tip || ps.line) return;
+                extra.push(partTipText(ps, i, yr));
+              });
+              return extra;
             },
             label:function(c){
             var i=c.dataIndex;
@@ -1504,16 +1566,7 @@
               var ps=null;
               for(var pi=0; pi<pseries.length; pi++){ if(pseries[pi].id===c.dataset.partId){ ps=pseries[pi]; break; } }
               if(!ps) return dsLabel+': —';
-              var pvNow = ps.raw[i];
-              if(pvNow==null) return ps.name+': 未入力';
-              if(blurOn) return ps.name+': '+(usdOn?'$':'¥')+'•••';
-              // 直前の「入力がある」点と比べる
-              var pPrev=null;
-              for(var pj=i-1; pj>=0; pj--){ if(ps.raw[pj]!=null){ pPrev=ps.raw[pj]; break; } }
-              if(pPrev==null) return ps.name+': '+fmtCur(pvNow, yr);
-              var pDiff=pvNow-pPrev;
-              var pRate=pPrev!==0?(pDiff/Math.abs(pPrev))*100:0;
-              return ps.name+': '+fmtCur(pvNow, yr)+'  ('+prevLbl+' '+fmtCurSigned(pDiff, yr)+' / '+pct(pRate)+')';
+              return partTipText(ps, i, yr);
             }
             // 移動平均線
             if(/^MA\d+$/.test(dsLabel)){
@@ -1782,7 +1835,7 @@
     for(var i=0;i<partDefs.length;i++){
       if(String(partDefs[i].name).trim()===key) return partDefs[i];
     }
-    var pd={ id:newPartId(), name:key, color:PART_COLORS[partDefs.length % PART_COLORS.length], on:true };
+    var pd={ id:newPartId(), name:key, color:PART_COLORS[partDefs.length % PART_COLORS.length], line:true, tip:true };
     partDefs.push(pd);
     created.push(key);
     return pd;
@@ -2167,10 +2220,12 @@
   })();
 
   /* ===== 表示切替（両方 / 資産のみ / 損益のみ） ===== */
-  document.querySelectorAll('.vm-btn').forEach(function(b){
+  // data-mode を持つボタンだけが表示モードの切替。
+  // 集計切替(#btn-group)は同じ見た目だが data-mode を持たないので、ここでは拾わない。
+  document.querySelectorAll('.vm-btn[data-mode]').forEach(function(b){
     b.addEventListener('click', function(){
       viewMode = this.getAttribute('data-mode');
-      document.querySelectorAll('.vm-btn').forEach(function(x){ x.classList.remove('active'); });
+      document.querySelectorAll('.vm-btn[data-mode]').forEach(function(x){ x.classList.remove('active'); });
       this.classList.add('active');
       updateAxisModeUI();
       render();
@@ -2366,7 +2421,8 @@
     function saveState(){ try{ localStorage.setItem(TOGGLE_KEY, JSON.stringify(state)); }catch(e){} }
 
     // key: 保存用キー, btn: ボタンid, panel: パネルid, label: ラベル, defCollapsed: 初期折りたたみ
-    function setup(key, btnId, panelId, label, defCollapsed){
+    var panels={}; // key -> { apply, panel }
+    function setup(key, btnId, panelId, label, defCollapsed, exclusiveWith){
       var btn=document.getElementById(btnId);
       var panel=document.getElementById(panelId);
       if(!btn||!panel) return;
@@ -2374,18 +2430,34 @@
         panel.classList.toggle('collapsed', collapsed);
         btn.textContent = (collapsed ? '▸ ' : '▾ ') + label;
       }
+      panels[key]={ apply:apply, panel:panel };
       var collapsed = (key in state) ? !!state[key] : !!defCollapsed;
       apply(collapsed);
       btn.addEventListener('click', function(){
         collapsed = !panel.classList.contains('collapsed');
         apply(collapsed);
-        state[key]=collapsed; saveState();
+        state[key]=collapsed;
+        // 片方を開いたら、対になっているパネルは閉じる
+        if(!collapsed && exclusiveWith && panels[exclusiveWith]){
+          var other=panels[exclusiveWith];
+          if(!other.panel.classList.contains('collapsed')){
+            other.apply(true);
+            state[exclusiveWith]=true;
+          }
+        }
+        saveState();
       });
     }
 
     setup('form', 'btn-form-toggle', 'form-panel', '記録を入力', false);
-    setup('list', 'btn-list-toggle', 'list', '記録一覧を表示', true);
-    setup('pedit', 'btn-pedit-toggle', 'pedit', '内訳を編集', true);
+    setup('list', 'btn-list-toggle', 'list', '記録一覧を表示', true, 'pedit');
+    setup('pedit', 'btn-pedit-toggle', 'pedit', '内訳を編集', true, 'list');
+    // 起動時に両方開いていたら内訳側を閉じる
+    if(panels.list && panels.pedit &&
+       !panels.list.panel.classList.contains('collapsed') &&
+       !panels.pedit.panel.classList.contains('collapsed')){
+      panels.pedit.apply(true); state.pedit=true; saveState();
+    }
     var gb=document.getElementById('btn-group');
     if(gb){
       gb.textContent = GROUP_LABEL[groupMode];
@@ -2929,19 +3001,35 @@
     }
     partDefs.forEach(function(pd){ list.appendChild(makePartItem(pd)); });
   }
+  function movePart(pd, dir){
+    var i=partDefs.indexOf(pd);
+    var j=i+dir;
+    if(i<0 || j<0 || j>=partDefs.length) return;
+    partDefs.splice(j, 0, partDefs.splice(i,1)[0]);
+    saveParts(); renderPartList(); renderPartInputs(); render();
+  }
   function makePartItem(pd){
+    var idx=partDefs.indexOf(pd);
     var row=document.createElement('div'); row.className='yoy-item part-item';
+    function swHtml(cls, on, cap){
+      return '<span class="pt-sw"><em>'+cap+'</em>'+
+        '<span class="boost-toggle-sw '+cls+(on?' on':'')+'"><span class="sw-track"></span>'+
+        '<span class="sw-label">'+(on?'ON':'OFF')+'</span></span></span>';
+    }
     row.innerHTML=
+      '<span class="pt-ord">'+
+        '<button class="pt-up" title="上へ"'+(idx<=0?' disabled':'')+'>▲</button>'+
+        '<button class="pt-down" title="下へ"'+(idx>=partDefs.length-1?' disabled':'')+'>▼</button>'+
+      '</span>'+
       '<span class="part-sw" style="background:'+escAttr(pd.color)+'"><input type="color" value="'+escAttr(pd.color)+'"></span>'+
       '<input type="text" class="part-name-in" value="'+escAttr(pd.name)+'" placeholder="名前（例: 証券口座A）">'+
-      '<span class="boost-toggle-sw'+(pd.on?' on':'')+'"><span class="sw-track"></span><span class="sw-label">'+(pd.on?'ON':'OFF')+'</span></span>'+
+      swHtml('sw-line', pd.line, '線') +
+      swHtml('sw-tip',  pd.tip,  '詳細') +
       '<button class="yoy-del">削除</button>';
     var ref=pd;
     var nameIn=row.querySelector('.part-name-in');
     var colIn=row.querySelector('input[type=color]');
     var swBox=row.querySelector('.part-sw');
-    var sw=row.querySelector('.boost-toggle-sw');
-    var swLabel=row.querySelector('.sw-label');
     nameIn.addEventListener('input', function(){
       ref.name=nameIn.value;
       saveParts(); renderPartInputs(); render();
@@ -2951,12 +3039,20 @@
       swBox.style.background=ref.color;
       saveParts(); renderPartInputs(); render();
     });
-    sw.addEventListener('click', function(){
-      ref.on=!ref.on;
-      sw.classList.toggle('on', ref.on);
-      swLabel.textContent=ref.on?'ON':'OFF';
-      saveParts(); render();
-    });
+    function bindSw(cls, prop){
+      var sw=row.querySelector('.'+cls);
+      var lb=sw.querySelector('.sw-label');
+      sw.addEventListener('click', function(){
+        ref[prop]=!ref[prop];
+        sw.classList.toggle('on', !!ref[prop]);
+        lb.textContent=ref[prop]?'ON':'OFF';
+        saveParts(); render();
+      });
+    }
+    bindSw('sw-line','line'); // グラフに線を描く
+    bindSw('sw-tip','tip');   // 点にカーソルを合わせたときの小窓に出す
+    row.querySelector('.pt-up').addEventListener('click', function(){ movePart(ref,-1); });
+    row.querySelector('.pt-down').addEventListener('click', function(){ movePart(ref, 1); });
     row.querySelector('.yoy-del').addEventListener('click', function(){
       if(!confirm('「'+(ref.name||'内訳')+'」を削除します。\n登録済みの記録の資産額はそのまま残ります（さかのぼって減ることはありません）。')) return;
       var i=partDefs.indexOf(ref); if(i>=0) partDefs.splice(i,1);
@@ -3027,7 +3123,7 @@
     if(addBtn){
       addBtn.addEventListener('click', function(){
         var c=PART_COLORS[partDefs.length % PART_COLORS.length];
-        partDefs.push({ id:newPartId(), name:'', color:c, on:true });
+        partDefs.push({ id:newPartId(), name:'', color:c, line:true, tip:true });
         saveParts(); renderPartList(); renderPartInputs(); render();
         var list=document.getElementById('part-list');
         var ins=list.querySelectorAll('.part-name-in');
