@@ -171,6 +171,9 @@
   .chart-box{position:relative; width:100%; height:var(--chart-h,380px); margin-bottom:24px;
     background:var(--surface); border:1px solid var(--border); border-radius:12px;
     padding:12px 12px 18px; min-height:220px;}
+  /* キーボード操作中であることが分かるように枠を濃くする */
+  .chart-box:focus-within{ box-shadow: inset 0 0 0 1px var(--text); }
+  #chart:focus{ outline:none; }
   .chart-resize{position:absolute; left:0; right:0; bottom:0; height:16px; cursor:ns-resize;
     display:flex; align-items:center; justify-content:center; z-index:2;
     border-bottom-left-radius:12px; border-bottom-right-radius:12px;}
@@ -1253,7 +1256,10 @@
   function drawChart(labels, values, pnls, years, fullDates, rawValues, rawPnls, cumPnls, cumRawPnls, yearCumRawPnls){
     // 「入力事項通り」のときは、点の横位置を日付の間隔どおりに置く。
     // 月ごと／年ごとは既に等間隔にまとまっているのでカテゴリ軸のまま。
-    var useTimeX = (groupMode==='raw') && fullDates.length>0;
+    var isRaw = (groupMode==='raw') && fullDates.length>0;
+    var lineShown = (viewMode==='both' || viewMode==='bothdelta' || viewMode==='asset' || viewMode==='parts');
+    var useTimeX  = isRaw && lineShown && viewMode!=='cumpnl'; // 線を日付の位置に置く
+    var useMonthX = isRaw && !useTimeX;                        // 棒だけの表示 → 月の軸を表に出す
     var xvals=[], xMin=0, xMax=1, xPad=0, showTick=[];
     if(useTimeX){
       xvals = fullDates.map(dayNum);
@@ -1277,6 +1283,17 @@
       return arr.map(function(v,i){ return { x:xvals[i], y:((v==null||isNaN(v)) ? null : v) }; });
     }
     // 棒の幅。線形軸では自動計算だと点が近い箇所に引きずられて細くなるので自前で決める
+    // 月の通し番号。同じ月の記録はすべて同じ番号になるので、棒は月単位で等間隔に並ぶ。
+    var monthKeys=[], monthIdx=[];
+    (function(){
+      var map={};
+      fullDates.forEach(function(d){
+        var k=d.slice(0,7);
+        if(!(k in map)){ map[k]=monthKeys.length; monthKeys.push(k); }
+        monthIdx.push(map[k]);
+      });
+    })();
+
     // その月で最後の記録かどうか。損益の棒はここにだけ立てる。
     // 月の途中の記録に損益が入っていても、棒としては出さない（重複表示を防ぐ）。
     var monthEnd = fullDates.map(function(d,i){
@@ -1299,7 +1316,79 @@
       }
       return { d:d, base:base };
     }
-    // 棒の幅は「実際に棒が立つ点どうしの間隔」を基準にする
+    // 棒の置き方。
+    //  線がある表示 … その月の最後の記録の日付に合わせる（上の点と縦位置が揃う）
+    //  棒だけの表示 … 揃える相手がいないので月の通し番号で等間隔に置く
+    function toBarXY(arr){
+      if(useTimeX) return toXY(arr);
+      if(!useMonthX) return arr;
+      return arr.map(function(v,i){ return { x:monthIdx[i], y:((v==null||isNaN(v)) ? null : v) }; });
+    }
+    // 選択中の点に縦線と日付を出す（キーボード操作でも位置が分かるように）
+    var selMarker = {
+      id:'selMarker',
+      afterDatasetsDraw:function(c){
+        if(hideHighlight || selectedIdx==null) return;
+        var i=selectedIdx, x=null;
+        for(var d=0; d<c.data.datasets.length && x==null; d++){
+          var m=c.getDatasetMeta(d);
+          if(m && m.data && m.data[i] && isFinite(m.data[i].x)) x=m.data[i].x;
+        }
+        if(x==null) return;
+        var a=c.chartArea, g=c.ctx;
+        if(!a) return;
+        g.save();
+        g.setLineDash([3,3]);
+        g.lineWidth=1;
+        g.strokeStyle='rgba(17,17,17,0.5)';
+        g.beginPath(); g.moveTo(x, a.top); g.lineTo(x, a.bottom); g.stroke();
+        g.setLineDash([]);
+        var t=fullDates[i]||'';
+        if(t){
+          g.font='11px -apple-system, sans-serif';
+          var tw=g.measureText(t).width;
+          var bw=tw+10, bx=Math.max(a.left, Math.min(a.right-bw, x-bw/2));
+          var by=Math.max(0, a.top-19);
+          g.fillStyle='rgba(17,17,17,0.88)';
+          if(g.roundRect){ g.beginPath(); g.roundRect(bx, by, bw, 16, 3); g.fill(); }
+          else g.fillRect(bx, by, bw, 16);
+          g.fillStyle='#ffffff';
+          g.textBaseline='middle'; g.textAlign='left';
+          g.fillText(t, bx+5, by+8);
+        }
+        g.restore();
+      }
+    };
+    function barWidth(nSets){
+      if(useTimeX)  return Math.min(24, barPx(nSets, monthEnd));
+      if(useMonthX) return barPxIdx(nSets);
+      return undefined;
+    }
+    function barPxIdx(nSets){
+      var box=document.getElementById('chart-box');
+      var w=(box && box.clientWidth) ? box.clientWidth : 700;
+      var plot=Math.max(60, w-80);
+      var n=Math.max(1, monthKeys.length);
+      return Math.max(4, Math.min(24, Math.floor(plot/n*0.6/Math.max(1, nSets||1))));
+    }
+    // 月単位の等間隔X軸（棒だけの表示のときは、これを目盛りとしても使う）
+    function monthXScale(axisGray){
+      return { type:'linear', offset:false, bounds:'data',
+        min:-0.5, max:Math.max(0.5, monthKeys.length-0.5),
+        afterBuildTicks:function(a){ a.ticks = monthKeys.map(function(_,i){ return { value:i }; }); },
+        ticks:{ color:axisGray, autoSkip:false, maxRotation:0, font:{size:11},
+          callback:function(val, idx){
+            var k=monthKeys[idx]; if(!k) return '';
+            var yr=k.slice(0,4), mo=k.slice(5,7), prev=monthKeys[idx-1];
+            var yearStart = (idx===0) || (prev && prev.slice(0,4)!==yr);
+            var n=monthKeys.length;
+            var step = n<=13 ? 1 : n<=26 ? 2 : Math.ceil(n/13);
+            var lbl = (yearStart || idx%step===0) ? mo : '';
+            return yearStart ? [lbl, yr] : lbl;
+          } },
+        grid:{ display:false } };
+    }
+    // （日付基準の幅計算。現在は線の描画のみで使用）
     function barPx(nSets, mask){
       var box=document.getElementById('chart-box');
       var w=(box && box.clientWidth) ? box.clientWidth : 700;
@@ -1336,7 +1425,7 @@
     if(viewMode === 'cumpnl'){
       var cumColors = cumPnls.map(function(v){ return v==null?'transparent':hexToRgba(v>=0?PLUS:MINUS, opacity.pnl); });
       var cumScales = {
-        x: useTimeX ? timeXScale(axisGray) :
+        x: useMonthX ? monthXScale(axisGray) :
            { ticks:{ color:axisGray, autoSkip:false, maxRotation:0, font:{size:11},
               callback:function(val, idx){
                 if(groupMode==='year') return years[idx];
@@ -1358,9 +1447,10 @@
           title:{ display:true, text:usdOn?'損益合計($)':'損益合計', color:axisGray, font:{size:11} } }
       };
       chart = new Chart(ctx, {
-        data:{ labels:(useTimeX?undefined:labels), datasets:[{ type:'bar', label:'損益合計', data:toXY(atMonthEnd(cumPnls)), yAxisID:'yCum',
+        plugins:[selMarker],
+        data:{ labels:((useTimeX||useMonthX)?undefined:labels), datasets:[{ type:'bar', label:'損益合計', data:toBarXY(atMonthEnd(cumPnls)), yAxisID:'yCum',
           backgroundColor:cumColors, borderRadius:4, borderSkipped:false,
-          maxBarThickness:28, barThickness:(useTimeX?barPx(1, monthEnd):undefined) }] },
+          maxBarThickness:24, barThickness:barWidth(1) }] },
         options:{
           responsive:true, maintainAspectRatio:false,
           animation: false,
@@ -1425,20 +1515,21 @@
     var barSets = (showDelta?1:0) + (showPnl?1:0); // 横に並ぶ棒の系列数
     var datasets = [];
     if(showDelta){
-      datasets.push({ type:'bar', label:'資産増減', data:toXY(deltaPlot), yAxisID:pnlAxis,
-        isDelta:true,
+      datasets.push({ type:'bar', label:'資産増減', data:toBarXY(deltaPlot), yAxisID:pnlAxis,
+        isDelta:true, tipRank:3,
         backgroundColor: deltaPlot.map(function(v){ return v==null?'transparent':hexToRgba(v>=0?DELTA_PLUS:DELTA_MINUS, opacity.pnl); }),
-        borderRadius:4, borderSkipped:false, maxBarThickness:28,
-        barThickness:(useTimeX?barPx(barSets, monthEnd):undefined), order:3 });
+        borderRadius:4, borderSkipped:false, maxBarThickness:24,
+        barThickness:barWidth(barSets), order:3 });
     }
     if(showPnl){
-      datasets.push({ type:'bar', label:'損益', data:toXY(pnlsShown), yAxisID:pnlAxis,
+      datasets.push({ type:'bar', label:'損益', data:toBarXY(pnlsShown), yAxisID:pnlAxis,
+        tipRank:2,
         backgroundColor: pnlsShown.map(function(v){ return v==null?'transparent':hexToRgba(v>=0?PLUS:MINUS, opacity.pnl); }),
-        borderRadius:4, borderSkipped:false, maxBarThickness:28,
-        barThickness:(useTimeX?barPx(barSets, monthEnd):undefined), order:2 });
+        borderRadius:4, borderSkipped:false, maxBarThickness:24,
+        barThickness:barWidth(barSets), order:2 });
     }
     if(showAsset){
-      datasets.push({ type:'line', label:'資産推移', data:toXY(values), yAxisID:'yAsset',
+      datasets.push({ type:'line', label:'資産推移', data:toXY(values), yAxisID:'yAsset', tipRank:0,
         borderColor:ACCENT, backgroundColor:hexToRgba(ACCENT, opacity.asset),
         borderWidth:2, fill:true, tension:0.25,
         pointRadius: values.map(function(_,i){ return i===selForHi?5:4; }),
@@ -1453,7 +1544,7 @@
         var p=parseInt(ma.period);
         if(!p || p<2) return;
         var maData=movingAverage(values, p);
-        datasets.push({ type:'line', label:'MA'+p, data:toXY(maData), yAxisID:'yAsset',
+        datasets.push({ type:'line', label:'MA'+p, data:toXY(maData), yAxisID:'yAsset', tipRank:1,
           borderColor: MA_COLORS[mi % MA_COLORS.length], backgroundColor:'transparent',
           borderWidth:1.5, fill:false, tension:0.25, pointRadius:0, pointHoverRadius:0,
           borderDash:[], spanGaps:true, order:0 });
@@ -1465,7 +1556,7 @@
       pseries.forEach(function(ps){
         if(ps.line){
           datasets.push({ type:'line', label:ps.name, data:toXY(ps.data), yAxisID:'yAsset',
-            partId: ps.id,
+            partId: ps.id, tipRank:4,
             borderColor: ps.color, backgroundColor: ps.color,
             borderWidth:1.5, fill:false, tension:0.25, pointRadius:2, pointHoverRadius:4,
             pointBackgroundColor: ps.color, pointBorderColor: ps.color,
@@ -1475,7 +1566,7 @@
           // 専用の非表示軸に載せるので、資産軸の目盛りには影響しない。
           ps.data.forEach(function(v){ if(v!=null && !isNaN(v)) ghostVals.push(v); });
           datasets.push({ type:'line', label:ps.name, data:toXY(ps.data), yAxisID:'yGhost',
-            partId: ps.id,
+            partId: ps.id, tipRank:4, isGhost:true,
             borderColor: ps.color, backgroundColor: ps.color,
             borderWidth:0, showLine:false, fill:false,
             pointRadius:0, pointHoverRadius:0, spanGaps:true, order:0 });
@@ -1484,7 +1575,7 @@
     }
 
     var scales = {
-      x: useTimeX ? timeXScale(axisGray) :
+      x: useTimeX ? timeXScale(axisGray) : useMonthX ? monthXScale(axisGray) :
          { ticks:{ color:axisGray, autoSkip:false, maxRotation:0, font:{size:11},
             callback:function(val, idx){
               if(groupMode==='year') return years[idx];
@@ -1623,7 +1714,7 @@
     }
 
     // ゼロ基準のときだけ、基準ライン（損益0＝資産の開始点）を破線で描いて位置を分かるようにする
-    var localPlugins = [];
+    var localPlugins = [selMarker];
     if(assetBounds && pnlBounds){
       localPlugins.push({
         id:'zeroAlignBaseline',
@@ -1645,7 +1736,7 @@
 
     chart = new Chart(ctx, {
       data:{
-        labels:(useTimeX?undefined:labels),
+        labels:((useTimeX||useMonthX)?undefined:labels),
         datasets:datasets
       },
       plugins: localPlugins,
@@ -1668,6 +1759,13 @@
         plugins:{
           legend:{ display:false },
           tooltip:{
+            // 小窓の並び順：資産 → 移動平均 → 損益 → 資産増減 → 内訳
+            itemSort:function(a, b){
+              var ra=(a.dataset&&a.dataset.tipRank!=null)?a.dataset.tipRank:9;
+              var rb=(b.dataset&&b.dataset.tipRank!=null)?b.dataset.tipRank:9;
+              if(ra!==rb) return ra-rb;
+              return a.datasetIndex-b.datasetIndex;
+            },
             // 「詳細を表示」がOFFの内訳は小窓から外す
             filter:function(item){
               var pid=item.dataset && item.dataset.partId;
@@ -2167,11 +2265,19 @@
   function highlightSelectedPoint(){
     if(!chart || !chart.data || !chart.data.datasets) return;
     var HI_BORDER='#111111';
-    var n = chart.data.labels ? chart.data.labels.length : 0;
+    // labels は日付軸のとき undefined なので、データ列の長さから求める
+    var n = 0;
+    for(var di=0; di<chart.data.datasets.length; di++){
+      var dl = chart.data.datasets[di].data;
+      if(dl && dl.length > n) n = dl.length;
+    }
     if(!n) return;
     // selectedIdxがnull、または一時的に非表示のときはどの点も強調しない
     var sel = (hideHighlight || selectedIdx==null || selectedIdx<0 || selectedIdx>=n) ? -1 : selectedIdx;
     chart.data.datasets.forEach(function(ds){
+      // 描画しないデータセット（小窓専用の内訳）は点を出さない。
+      // ここを除外しないと、選択のたびに非表示軸上の点が現れてしまう。
+      if(ds.isGhost || ds.showLine===false) return;
       if(ds.type==='line' && !/^MA\d+$/.test(ds.label||'')){
         ds.pointRadius = ds.data.map(function(_,i){ return i===sel?5:4; });
         ds.pointHoverRadius = ds.data.map(function(_,i){ return i===sel?6:5; });
