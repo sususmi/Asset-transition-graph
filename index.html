@@ -1090,6 +1090,20 @@
     cumRawData = cumRaw;
     // 年ごとの累計（年合計・その年の頭からの積み上げ）
     var yearCumRaw = yearCumUpTo(rawView, view);
+
+    // 年ごと表示では、損益は「その年の合計」を出す。
+    // 各点はその年の最後の記録なので、年初からの積み上げがそのまま年合計になる。
+    if(groupMode==='year'){
+      pnls = yearCumRaw.slice();
+      plotPnls = pnls;
+      if(usdOn){
+        plotPnls = view.map(function(d, i){
+          if(pnls[i]==null) return null;
+          var u=toUSD(pnls[i], d.date.slice(0,4));
+          return u==null?null:u;
+        });
+      }
+    }
     // 描画用（ドル表示ならその年のレートで換算）
     var cumPlot = cumRaw;
     if(usdOn){
