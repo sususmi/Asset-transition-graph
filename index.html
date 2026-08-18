@@ -1142,14 +1142,17 @@
     saveRange();
   }
 
-  function updateLegendCandle(show){
+  function updateLegendCandle(show, maLines){
     var box=document.getElementById('legend-candle');
     if(!box) return;
-    box.innerHTML = show
-      ? '<span><span class="dot" style="background:'+candleUpColor()+'"></span>上げ</span>'+
-        '<span><span class="dot" style="background:'+candleDownColor()+'"></span>下げ</span>'+
-        '<span style="color:var(--text-muted)">始値は前の期間の終値</span>'
-      : '';
+    if(!show){ box.innerHTML=''; return; }
+    var html='<span><span class="dot" style="background:'+candleUpColor()+'"></span>上げ</span>'+
+             '<span><span class="dot" style="background:'+candleDownColor()+'"></span>下げ</span>';
+    (maLines||[]).forEach(function(m){
+      html+='<span><span class="line-dot" style="background:'+m.color+'"></span>'+m.label+'</span>';
+    });
+    html+='<span style="color:var(--text-muted)">始値は前の期間の終値</span>';
+    box.innerHTML=html;
   }
   function updateLegendDelta(show){
     var box=document.getElementById('legend-delta');
@@ -1561,19 +1564,40 @@
         return Math.max(3, Math.min(26, Math.floor(plot/Math.max(1,candles.length)*0.62)));
       })();
 
+      // 移動平均は終値ベース（月足なら月末、年足なら年末の終値をつないだ平均）
+      var cCloses = candles.map(function(c){ return c.close; });
+      var cDatasets = [
+        { type:'bar', label:'ヒゲ', data:candles.map(function(c){ return [c.low, c.high]; }),
+          backgroundColor:cCols, borderSkipped:false, borderRadius:0,
+          barThickness:Math.max(1, Math.round(bodyW*0.14)), grouped:false, order:0 },
+        { type:'bar', label:'ローソク', data:candles.map(function(c){ return [c.open, c.close]; }),
+          backgroundColor:cCols, borderSkipped:false, borderRadius:1,
+          barThickness:bodyW, minBarLength:2, grouped:false, order:1 }
+      ];
+      var cMaLines = [];
+      maList.forEach(function(ma, mi){
+        if(!ma.on) return;
+        var pnum = parseInt(ma.period, 10);
+        if(!pnum || pnum < 2) return;
+        var mad = movingAverage(cCloses, pnum);
+        var has=false;
+        for(var q=0;q<mad.length;q++){ if(mad[q]!=null){ has=true; break; } }
+        if(!has) return;
+        var col = MA_COLORS[mi % MA_COLORS.length];
+        cMaLines.push({ label:'MA'+pnum, color:col });
+        cDatasets.push({ type:'line', label:'MA'+pnum, data:mad,
+          borderColor:col, backgroundColor:'transparent',
+          borderWidth:1.5, fill:false, tension:0.25,
+          pointRadius:0, pointHoverRadius:0, spanGaps:true, order:2 });
+      });
+
       updateLegendParts(false, []);
       updateLegendDelta(false);
-      updateLegendCandle(true);
+      updateLegendCandle(true, cMaLines);
+
       if(chart) chart.destroy();
       chart = new Chart(ctx, {
-        data:{ labels:cLabels, datasets:[
-          { type:'bar', label:'ヒゲ', data:candles.map(function(c){ return [c.low, c.high]; }),
-            backgroundColor:cCols, borderSkipped:false, borderRadius:0,
-            barThickness:Math.max(1, Math.round(bodyW*0.14)), grouped:false, order:1 },
-          { type:'bar', label:'ローソク', data:candles.map(function(c){ return [c.open, c.close]; }),
-            backgroundColor:cCols, borderSkipped:false, borderRadius:1,
-            barThickness:bodyW, minBarLength:2, grouped:false, order:0 }
-        ]},
+        data:{ labels:cLabels, datasets:cDatasets },
         options:{
           responsive:true, maintainAspectRatio:false,
           animation:false, layout:{ padding:{ top:26 } },
@@ -1590,6 +1614,14 @@
                 label:function(item){
                   var c=candles[item.dataIndex];
                   if(!c) return '';
+                  var yr0=c.date.slice(0,4);
+                  // 移動平均線はその値だけ出す
+                  if(item.dataset && item.dataset.type==='line'){
+                    var mv=item.parsed ? item.parsed.y : null;
+                    if(mv==null) return '';
+                    if(blurOn) return item.dataset.label+': '+(usdOn?'$':'¥')+'•••';
+                    return item.dataset.label+': '+fmtCur(mv, yr0);
+                  }
                   if(blurOn) return (usdOn?'$':'¥')+'•••';
                   var yr=c.date.slice(0,4);
                   var diff=c.close-c.open;
@@ -1601,7 +1633,9 @@
                           '増減: '+fmtCurSigned(diff, yr)+' / '+pct(rate)];
                 },
                 labelColor:function(item){
-                  var col=cCols[item.dataIndex]||upC;
+                  var col=(item.dataset && item.dataset.type==='line')
+                    ? item.dataset.borderColor
+                    : (cCols[item.dataIndex]||upC);
                   return { borderColor:col, backgroundColor:col, borderWidth:2, borderRadius:2 };
                 }
               }
