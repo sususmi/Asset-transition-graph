@@ -87,6 +87,11 @@
   .ma-item .ma-swatch{width:16px; height:16px; border-radius:3px; flex:0 0 auto;}
   .ma-item .ma-unit{font-size:12px; color:var(--text-sub);}
   .count-note{font-size:12px; color:var(--text-muted); text-align:right; margin:4px 0 0;}
+  .panel-close{display:none; justify-content:center; margin:-2px 0 10px;}
+  .panel-close button{height:26px; padding:0 16px; font-size:11.5px; font-weight:400;
+    background:transparent; color:var(--text-muted);
+    border:1px solid var(--border); border-radius:13px;}
+  .panel-close button:hover{color:var(--text); border-color:var(--text-sub);}
   .save-warn{display:none; border:1px solid var(--minus); border-radius:var(--radius);
     padding:10px 12px; margin:0 0 14px; font-size:13px; line-height:1.6; color:var(--text);}
   .save-warn.on{display:block;}
@@ -2364,8 +2369,73 @@
       }
       // 棒（損益・損益合計）とMA線は強調しない
     });
+    showTooltipAt(sel);
     chart.update('none'); // アニメなしで即反映
   }
+
+  // 選択中の点の小窓を、マウスを乗せなくても出す（キーボード操作用）
+  function showTooltipAt(sel){
+    if(!chart || !chart.tooltip) return;
+    try{
+      if(sel<0){ chart.tooltip.setActiveElements([], {x:0, y:0}); return; }
+      var items=[], anchor=null;
+      chart.data.datasets.forEach(function(ds, di){
+        var m=chart.getDatasetMeta(di);
+        if(!m || !m.data || !m.data[sel]) return;
+        items.push({ datasetIndex:di, index:sel });
+        var el=m.data[sel];
+        if(!anchor && isFinite(el.x) && isFinite(el.y)) anchor={ x:el.x, y:el.y };
+      });
+      if(!items.length) return;
+      if(!anchor){
+        var a=chart.chartArea;
+        anchor = a ? { x:(a.left+a.right)/2, y:(a.top+a.bottom)/2 } : { x:0, y:0 };
+      }
+      chart.tooltip.setActiveElements(items, anchor);
+    }catch(e){}
+  }
+
+  /* ===== 開いているパネルの下に「閉じる」を出す ===== */
+  (function(){
+    var pairs=[
+      ['btn-form-toggle','form-panel'], ['btn-bulk-toggle','bulk'],
+      ['btn-ma-toggle','ma-panel'], ['btn-boost-toggle','boost-panel'],
+      ['btn-part-toggle','part-panel'],
+      ['btn-principal-toggle','principal-panel'], ['btn-yoy-toggle','yoy-panel'],
+      ['btn-rate-toggle','rate-panel'],
+      ['btn-list-toggle','list'], ['btn-pedit-toggle','pedit']
+    ];
+    pairs.forEach(function(pr){
+      var btn=document.getElementById(pr[0]);
+      var panel=document.getElementById(pr[1]);
+      if(!btn || !panel || !panel.parentNode) return;
+      // パネルの中に入れると、一覧の再描画で消えてしまうものがあるので兄弟として置く
+      var closer=document.createElement('div');
+      closer.className='panel-close';
+      var b=document.createElement('button');
+      b.type='button';
+      b.textContent='▲ 閉じる';
+      b.addEventListener('click', function(){
+        btn.click(); // 開閉の処理は元のボタンに任せる
+        try{ btn.scrollIntoView({block:'nearest'}); }catch(e){}
+      });
+      closer.appendChild(b);
+      panel.parentNode.insertBefore(closer, panel.nextSibling);
+
+      function isOpen(){
+        if(panel.classList.contains('collapsed')) return false;
+        if(panel.classList.contains('bulk')) return panel.classList.contains('open');
+        return true;
+      }
+      function sync(){ closer.style.display = isOpen() ? 'flex' : 'none'; }
+      if(window.MutationObserver){
+        new MutationObserver(sync).observe(panel, { attributes:true, attributeFilter:['class'] });
+      }
+      // 元のトグル処理より後に走らせるため、クリック時も遅らせて反映する
+      btn.addEventListener('click', function(){ setTimeout(sync, 0); });
+      setTimeout(sync, 0); // 起動直後の状態も、各パネルの初期化が終わってから見る
+    });
+  })();
 
   /* ===== グラフをキーボードで操作（選択点を左右に移動） ===== */
   (function(){
