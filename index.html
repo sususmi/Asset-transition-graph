@@ -400,9 +400,9 @@
     <div class="stat stat-compare">
       <div class="cmp-tabs" data-slot="A">
         <button class="cmp-tab active" data-cmp="last">前月</button>
+        <button class="cmp-tab" data-cmp="prev">前回</button>
         <button class="cmp-tab" data-cmp="yoy">前年</button>
         <button class="cmp-tab" data-cmp="base">元本</button>
-        <button class="cmp-tab" data-cmp="first">最初</button>
       </div>
       <div class="val" id="stat-compare-A">—</div>
       <div class="cmp-note" id="stat-compare-note-A"></div>
@@ -410,9 +410,9 @@
     <div class="stat stat-compare">
       <div class="cmp-tabs" data-slot="B">
         <button class="cmp-tab" data-cmp="last">前月</button>
+        <button class="cmp-tab" data-cmp="prev">前回</button>
         <button class="cmp-tab active" data-cmp="yoy">前年</button>
         <button class="cmp-tab" data-cmp="base">元本</button>
-        <button class="cmp-tab" data-cmp="first">最初</button>
       </div>
       <div class="val" id="stat-compare-B">—</div>
       <div class="cmp-note" id="stat-compare-note-B"></div>
@@ -934,10 +934,23 @@
   var hideHighlight = false; // グラフ外クリック時は色（強調）だけ隠す
 
   // 指定モードの基準値と補足テキストを返す
+  // 今いる点から見て、ひとつ前の「別の月」の記録を探す。
+  // 同じ月に複数記録があっても、月をまたいだ相手と比べられる。
+  function prevMonthIdx(view, idx){
+    var ym = view[idx].date.slice(0,7);
+    for(var j=idx-1; j>=0; j--){
+      if(view[j].date.slice(0,7) !== ym) return j;
+    }
+    return -1;
+  }
   function computeCompare(view, idx, mode){
     if(mode === 'last'){
-      if(idx >= 1) return { base: view[idx-1].value, note: view[idx-1].date + ' と比較' };
+      var pm = prevMonthIdx(view, idx);
+      if(pm >= 0) return { base: view[pm].value, note: view[pm].date + ' と比較' };
       return { base: null, note: '前月の記録なし' };
+    } else if(mode === 'prev'){
+      if(idx >= 1) return { base: view[idx-1].value, note: view[idx-1].date + ' と比較' };
+      return { base: null, note: '前の記録なし' };
     } else if(mode === 'yoy'){
       var yr = view[idx].date.slice(0,4);
       var b = yoyBases[yr];
@@ -946,8 +959,6 @@
     } else if(mode === 'base'){
       if(principalBase!=null && !isNaN(principalBase)) return { base: principalBase, note: '元手 '+yen(principalBase)+' と比較' };
       return { base: null, note: '元手が未設定' };
-    } else if(mode === 'first'){
-      return { base: view[0].value, note: view[0].date + '（期間の先頭）と比較' };
     }
     return { base: null, note: '' };
   }
@@ -956,8 +967,12 @@
   function computeCumCompare(view, idx, mode){
     var cum = cumRawData;
     if(mode === 'last'){
-      if(idx >= 1) return { base: cum[idx-1], note: view[idx-1].date + ' からの増減' };
+      var pm = prevMonthIdx(view, idx);
+      if(pm >= 0) return { base: cum[pm], note: view[pm].date + ' からの増減' };
       return { base: null, note: '前月の記録なし' };
+    } else if(mode === 'prev'){
+      if(idx >= 1) return { base: cum[idx-1], note: view[idx-1].date + ' からの増減' };
+      return { base: null, note: '前の記録なし' };
     } else if(mode === 'yoy'){
       // 前年末（前年の最後の点）の累積損益と比較
       var yr = view[idx].date.slice(0,4);
@@ -968,8 +983,6 @@
     } else if(mode === 'base'){
       // 損益は0から積み上がるので、合計そのもの（0基準）
       return { base: 0, note: '累計の合計損益' };
-    } else if(mode === 'first'){
-      return { base: cum[0], note: view[0].date + '（期間の先頭）からの増減' };
     }
     return { base: null, note: '' };
   }
@@ -2704,14 +2717,16 @@
     updateAxisModeUI();
   })();
 
-  /* ===== 比較モード切替（前月比 / 前年比 / 元本比） ===== */
+  /* ===== 比較モード切替（前月比 / 前回比 / 前年比 / 元本比） ===== */
   (function(){
     // 保存済みモードを復元
     try{
       var saved = JSON.parse(localStorage.getItem(CMP_KEY)||'null');
       if(saved && typeof saved==='object'){
         ['A','B'].forEach(function(s){
-          if(saved[s]==='last'||saved[s]==='yoy'||saved[s]==='base'||saved[s]==='first') compareModes[s]=saved[s];
+          // 'first'（最初）は廃止したので、保存されていたら前月に寄せる
+          if(saved[s]==='first') compareModes[s]='last';
+          else if(saved[s]==='last'||saved[s]==='prev'||saved[s]==='yoy'||saved[s]==='base') compareModes[s]=saved[s];
         });
       }
     }catch(e){}
