@@ -197,7 +197,13 @@
   .list{display:flex; flex-direction:column; gap:4px;}
   .row{display:flex; align-items:center; justify-content:space-between;
     padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px;}
-  .row .date{color:var(--text-sub);}
+  .row .date{color:var(--text-sub); display:inline-flex; align-items:center; gap:6px;}
+  .mrow-toggle{height:20px; min-width:28px; padding:0 6px; font-size:10.5px; font-weight:600;
+    background:transparent; color:var(--text-muted); border:1px solid var(--border);
+    border-radius:10px; flex:0 0 auto;}
+  .mrow-toggle:hover{color:var(--text); border-color:var(--text-sub);}
+  .row.sub{background:var(--surface-2); border-style:dashed;}
+  .row.sub .date{padding-left:34px; color:var(--text-muted);}
   .row .right{display:flex; align-items:center; gap:12px;}
   .row .amt{font-weight:600;}
   .row .pct{min-width:66px; text-align:right; font-size:12px;}
@@ -884,24 +890,37 @@
     });
     return keys.map(function(k){ return map[k]; });
   }
-  // 累積損益は「まとめる前の全記録」を積み上げて、各点の日付時点の値にする。
-  // 点を間引いても合計が目減りしないようにするため。
+  // その月で最後の記録かどうか（配列は日付の昇順）
+  function monthEndFlags(arr){
+    var out=[];
+    for(var i=0;i<arr.length;i++){
+      out.push(i===arr.length-1 || arr[i].date.slice(0,7)!==arr[i+1].date.slice(0,7));
+    }
+    return out;
+  }
+  // 累積損益。損益は月末の記録だけを対象にするので、積み上げも月末だけを足す。
+  // 月の途中に入れた損益はグラフの棒にも合計にも含めない。
   function cumUpTo(raw, view){
+    var me=monthEndFlags(raw);
     var out=[], run=0, ri=0;
     view.forEach(function(b){
-      while(ri<raw.length && raw[ri].date<=b.date){ run += (raw[ri].pnl==null?0:raw[ri].pnl); ri++; }
+      while(ri<raw.length && raw[ri].date<=b.date){
+        if(me[ri]) run += (raw[ri].pnl==null?0:raw[ri].pnl);
+        ri++;
+      }
       out.push(run);
     });
     return out;
   }
-  // 年初からの積み上げ（年合計）。同じく全記録ベース。
+  // 年初からの積み上げ（年合計）。同じく月末だけを足す。
   function yearCumUpTo(raw, view){
+    var me=monthEndFlags(raw);
     var out=[], run=0, curYr=null, ri=0;
     view.forEach(function(b){
       while(ri<raw.length && raw[ri].date<=b.date){
         var y=raw[ri].date.slice(0,4);
         if(y!==curYr){ curYr=y; run=0; }
-        run += (raw[ri].pnl==null?0:raw[ri].pnl);
+        if(me[ri]) run += (raw[ri].pnl==null?0:raw[ri].pnl);
         ri++;
       }
       out.push(run);
@@ -1893,14 +1912,32 @@
   }
 
   var editingDate = null;
+  var expandedMonths = {}; // 記録一覧で、月の途中の記録を開いている月（'YYYY-MM'）
 
   function drawList(view, values){
     var el = document.getElementById('list');
     if(!view.length){ el.innerHTML='<div class="empty">まだ記録がありません。日付と資産額を入力してください（損益は任意）。</div>'; return; }
     el.innerHTML='';
+    // 月ごとの件数と、その月で最後の記録かどうか（viewは古い順）
+    var monthCount={}, isMonthEnd=[], prevMonthEndIdx=[];
+    var lastME=-1;
+    for(var mi=0; mi<view.length; mi++){
+      var mk0=view[mi].date.slice(0,7);
+      monthCount[mk0]=(monthCount[mk0]||0)+1;
+      isMonthEnd[mi] = (mi===view.length-1) || (view[mi+1].date.slice(0,7)!==mk0);
+    }
+    for(var mj=0; mj<view.length; mj++){
+      prevMonthEndIdx[mj]=lastME;
+      if(isMonthEnd[mj]) lastME=mj;
+    }
+
     for(var i=view.length-1;i>=0;i--){
       var d=view[i], p=(d.pnl==null)?null:d.pnl;
+      var mk=d.date.slice(0,7);
+      // 既定では月末の記録だけ出す。編集中の行は隠さない
+      if(!isMonthEnd[i] && !expandedMonths[mk] && d.date!==editingDate) continue;
       var row=document.createElement('div'); row.className='row';
+      if(!isMonthEnd[i]) row.classList.add('sub');
 
       if(d.date===editingDate){
         row.classList.add('editing');
@@ -1933,8 +1970,10 @@
       }
 
       var pctText='—', pctColor='var(--text-muted)';
-      if(i>0){
-        var prev=values[i-1], diff=values[i]-prev;
+      // 月末の行は前の月末と、月の途中の行は直前の記録と比べる
+      var baseIdx = isMonthEnd[i] ? prevMonthEndIdx[i] : i-1;
+      if(baseIdx>=0){
+        var prev=values[baseIdx], diff=values[i]-prev;
         var rate=prev!==0?(diff/Math.abs(prev))*100:0;
         pctText=pct(rate);
         pctColor=diff>0?PLUS:diff<0?MINUS:'var(--text-muted)';
@@ -1942,7 +1981,13 @@
       var pColor = p==null?'var(--text-muted)':p>0?PLUS:p<0?MINUS:'var(--text-muted)';
       var yr = d.date.slice(0,4);
       var pText = p==null?'—':fmtCurSigned(p, yr);
-      row.innerHTML='<span class="date">'+d.date+'</span>'+
+      // その月に他の記録があれば、月末の行に開閉マークを付ける
+      var extra = isMonthEnd[i] ? (monthCount[mk]-1) : 0;
+      var mark = extra>0
+        ? '<button class="mrow-toggle" data-month="'+mk+'" title="この月の他の記録を表示">'+
+          (expandedMonths[mk]?'▾':'▸')+extra+'</button>'
+        : '';
+      row.innerHTML='<span class="date">'+mark+d.date+'</span>'+
         '<span class="right">'+
         '<span class="amt">'+fmtCur(d.value, yr)+'</span>'+
         '<span class="pct" style="color:'+pctColor+'">'+pctText+'</span>'+
@@ -1953,6 +1998,14 @@
       el.appendChild(row);
     }
 
+    el.querySelectorAll('.mrow-toggle').forEach(function(b){
+      b.addEventListener('click', function(e){
+        e.stopPropagation();
+        var m=this.getAttribute('data-month');
+        expandedMonths[m] = !expandedMonths[m];
+        render();
+      });
+    });
     el.querySelectorAll('.del').forEach(function(b){
       b.addEventListener('click', function(){
         var dt=this.getAttribute('data-date');
