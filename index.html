@@ -393,6 +393,7 @@
     <button class="col-reset" id="btn-color-reset">リセット</button>
     <button class="col-reset" id="btn-usd">$ ドル表示</button>
     <button class="col-reset" id="btn-blur">🙈 金額をぼかす</button>
+    <button class="col-reset" id="btn-candle-color">陽線 緑</button>
   </div>
   <p id="usd-note" style="display:none; font-size:12px; color:var(--minus); margin:0 0 16px;"></p>
 
@@ -430,12 +431,14 @@
     <button class="vm-btn" id="btn-only" data-only="asset" title="タップするたび 資産推移のみ → 損益のみ → 資産増減のみ と切り替わります"><i class="sw-mark">⇄</i>資産推移のみ</button>
     <button class="vm-btn" id="btn-cum" data-cum="pnl" title="タップするたび 損益合計推移 ⇄ 資産増減合計 と切り替わります"><i class="sw-mark">⇄</i>損益合計推移</button>
     <button class="vm-btn" data-mode="parts">内訳のみ</button>
+    <button class="vm-btn" id="btn-candle" data-candle="m" title="タップするたび ローソク月足 ⇄ ローソク年足 と切り替わります"><i class="sw-mark">⇄</i>ローソク月足</button>
     <button class="vm-btn vm-group" id="btn-group" title="タップするたび 入力事項通り → 月ごと → 年ごと と切り替わります">入力事項通り</button>
   </div>
   <div class="legend">
     <span><span class="line-dot" style="background:var(--accent)"></span>資産推移</span>
     <span><span class="dot" style="background:var(--plus)"></span>損益 プラス</span>
     <span><span class="dot" style="background:var(--minus)"></span>損益 マイナス</span>
+    <span id="legend-candle" style="display:contents;"></span>
     <span id="legend-delta" style="display:contents;"></span>
     <span id="legend-parts" style="display:contents;"></span>
   </div>
@@ -808,6 +811,12 @@
     }catch(e){}
   }
   var viewMode = 'both'; // 'both' | 'asset' | 'pnl' | 'cumpnl' | 'parts' | 'delta'
+  var CANDLE_KEY = 'asset_tracker_candleswap_v1';
+  var candleSwap = false; // false: 上げ=緑・下げ=赤 / true: 上げ=赤・下げ=緑
+  function loadCandleSwap(){ try{ candleSwap = localStorage.getItem(CANDLE_KEY)==='1'; }catch(e){} }
+  function saveCandleSwap(){ try{ localStorage.setItem(CANDLE_KEY, candleSwap?'1':'0'); }catch(e){} }
+  function candleUpColor(){ return candleSwap ? MINUS : PLUS; }
+  function candleDownColor(){ return candleSwap ? PLUS : MINUS; }
   var DELTA_PLUS = '#2f9e8f';        // 資産増減 プラス（損益の色と区別する）
   var DELTA_MINUS = '#c0653a';       // 資産増減 マイナス
 
@@ -1133,6 +1142,15 @@
     saveRange();
   }
 
+  function updateLegendCandle(show){
+    var box=document.getElementById('legend-candle');
+    if(!box) return;
+    box.innerHTML = show
+      ? '<span><span class="dot" style="background:'+candleUpColor()+'"></span>上げ</span>'+
+        '<span><span class="dot" style="background:'+candleDownColor()+'"></span>下げ</span>'+
+        '<span style="color:var(--text-muted)">始値は前の期間の終値</span>'
+      : '';
+  }
   function updateLegendDelta(show){
     var box=document.getElementById('legend-delta');
     if(!box) return;
@@ -1495,6 +1513,124 @@
     var axisGray = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#8a8a82';
 
     // 損益合計推移モード：累積損益の棒グラフのみ
+    /* ===== ローソク足（月足 / 年足） ===== */
+    if(viewMode === 'candleM' || viewMode === 'candleY'){
+      var cCut = (viewMode==='candleY') ? 4 : 7;
+      // 期間ごとに記録をまとめて四本値を作る。
+      // 始値は前の期間の終値。株価と同じで、期間の入り口の値を起点にする。
+      var cKeys=[], cMap={};
+      (viewRaw||[]).forEach(function(r){
+        if(r.value==null || isNaN(r.value)) return;
+        var k=r.date.slice(0,cCut);
+        if(!cMap[k]){ cKeys.push(k); cMap[k]=[]; }
+        cMap[k].push(r);
+      });
+      var candles=[], prevClose=null;
+      cKeys.forEach(function(k){
+        var g=cMap[k], vals=g.map(function(r){ return r.value; });
+        var close=vals[vals.length-1];
+        var open=(prevClose==null)? vals[0] : prevClose;
+        var all=vals.concat([open]);
+        candles.push({
+          key:k, date:g[g.length-1].date, n:g.length,
+          open:open, close:close,
+          high:Math.max.apply(null, all), low:Math.min.apply(null, all)
+        });
+        prevClose=close;
+      });
+      // ドル表示のときはその年のレートで換算（換算できない期間は出さない）
+      if(usdOn){
+        candles = candles.filter(function(c){
+          var yr=c.date.slice(0,4);
+          var o=toUSD(c.open,yr), cl=toUSD(c.close,yr), h=toUSD(c.high,yr), l=toUSD(c.low,yr);
+          if(o==null||cl==null||h==null||l==null) return false;
+          c.open=o; c.close=cl; c.high=h; c.low=l; return true;
+        });
+      }
+
+      var cLabels = candles.map(function(c){
+        return (cCut===4) ? c.key : c.key.slice(5);
+      });
+      var cYears = candles.map(function(c){ return c.key.slice(0,4); });
+      var upC = candleUpColor(), downC = candleDownColor();
+      var cCols = candles.map(function(c){ return c.close>=c.open ? upC : downC; });
+      var bodyW = (function(){
+        var box=document.getElementById('chart-box');
+        var w=(box && box.clientWidth) ? box.clientWidth : 700;
+        var plot=Math.max(60, w-80);
+        return Math.max(3, Math.min(26, Math.floor(plot/Math.max(1,candles.length)*0.62)));
+      })();
+
+      updateLegendParts(false, []);
+      updateLegendDelta(false);
+      updateLegendCandle(true);
+      if(chart) chart.destroy();
+      chart = new Chart(ctx, {
+        data:{ labels:cLabels, datasets:[
+          { type:'bar', label:'ヒゲ', data:candles.map(function(c){ return [c.low, c.high]; }),
+            backgroundColor:cCols, borderSkipped:false, borderRadius:0,
+            barThickness:Math.max(1, Math.round(bodyW*0.14)), grouped:false, order:1 },
+          { type:'bar', label:'ローソク', data:candles.map(function(c){ return [c.open, c.close]; }),
+            backgroundColor:cCols, borderSkipped:false, borderRadius:1,
+            barThickness:bodyW, minBarLength:2, grouped:false, order:0 }
+        ]},
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          animation:false, layout:{ padding:{ top:26 } },
+          interaction:{ mode:'index', intersect:false },
+          plugins:{
+            legend:{ display:false },
+            tooltip:{
+              filter:function(item){ return item.dataset.label!=='ヒゲ'; },
+              callbacks:{
+                title:function(items){
+                  var c=candles[items[0].dataIndex];
+                  return c.key + (c.n>1 ? '（記録'+c.n+'件）' : '');
+                },
+                label:function(item){
+                  var c=candles[item.dataIndex];
+                  if(!c) return '';
+                  if(blurOn) return (usdOn?'$':'¥')+'•••';
+                  var yr=c.date.slice(0,4);
+                  var diff=c.close-c.open;
+                  var rate=c.open!==0?(diff/Math.abs(c.open))*100:0;
+                  return ['始値: '+fmtCur(c.open, yr),
+                          '高値: '+fmtCur(c.high, yr),
+                          '安値: '+fmtCur(c.low, yr),
+                          '終値: '+fmtCur(c.close, yr),
+                          '増減: '+fmtCurSigned(diff, yr)+' / '+pct(rate)];
+                },
+                labelColor:function(item){
+                  var col=cCols[item.dataIndex]||upC;
+                  return { borderColor:col, backgroundColor:col, borderWidth:2, borderRadius:2 };
+                }
+              }
+            }
+          },
+          scales:{
+            x:{ ticks:{ color:axisGray, autoSkip:false, maxRotation:0, font:{size:11},
+                  callback:function(val, idx){
+                    if(cCut===4) return cLabels[idx];
+                    var yearStart = idx===0 || (cYears[idx]!==cYears[idx-1]);
+                    var n=cLabels.length;
+                    var step = n<=13 ? 1 : n<=26 ? 2 : Math.ceil(n/13);
+                    var lbl = (yearStart || idx%step===0) ? cLabels[idx] : '';
+                    return yearStart ? [lbl, cYears[idx]] : lbl;
+                  } },
+                grid:{ display:false } },
+            y:{ position:'right',
+                ticks:{ color:ACCENT, callback:function(v){
+                  if(blurOn) return (usdOn?'$':'¥')+'•••';
+                  return compactNum(v);
+                } },
+                grid:{ color:'rgba(150,150,140,0.15)' },
+                title:{ display:true, text:(usdOn?'資産($)':'資産'), color:ACCENT, font:{size:11} } }
+          }
+        }
+      });
+      return;
+    }
+
     if(viewMode === 'cumpnl' || viewMode === 'cumdelta'){
       var isCumD = (viewMode === 'cumdelta');
       // 資産増減の合計＝最初の月末からの資産の増減。月末の点にだけ出す。
@@ -1592,6 +1728,7 @@
     var pseries   = showParts ? partSeries() : [];
     updateLegendParts(showParts, pseries);
     updateLegendDelta(showDelta);
+    updateLegendCandle(false);
 
     // 選択中の点を強調（資産推移の点だけ枠を黒く／控えめに）
     var selForHi = (hideHighlight || selectedIdx==null || selectedIdx<0 || selectedIdx>=values.length) ? -1 : selectedIdx;
@@ -2456,6 +2593,11 @@
   // 選択中の点の小窓を、マウスを乗せなくても出す（キーボード操作用）
   function showTooltipAt(sel){
     if(!chart || !chart.tooltip) return;
+    // ローソク足は期間ごとの並びで、点の番号が対応しない
+    if(viewMode==='candleM' || viewMode==='candleY'){
+      try{ chart.tooltip.setActiveElements([], {x:0, y:0}); }catch(e){}
+      return;
+    }
     try{
       if(sel<0){ chart.tooltip.setActiveElements([], {x:0, y:0}); return; }
       var items=[], anchor=null;
@@ -2700,7 +2842,7 @@
   /* ===== 表示切替（両方 / 資産のみ / 損益のみ） ===== */
   // 表示モードの選択状態を1つのボタンに集約する
   function setActiveVm(btn){
-    document.querySelectorAll('.vm-btn[data-mode], #btn-only, #btn-both, #btn-cum').forEach(function(x){ x.classList.remove('active'); });
+    document.querySelectorAll('.vm-btn[data-mode], #btn-only, #btn-both, #btn-cum, #btn-candle').forEach(function(x){ x.classList.remove('active'); });
     if(btn) btn.classList.add('active');
   }
   // ラベルの前に切替マークを付ける
@@ -2748,6 +2890,23 @@
     { key:'pnl',   mode:'cumpnl',   label:'損益合計推移' },
     { key:'delta', mode:'cumdelta', label:'資産増減合計' }
   ]);
+  // ローソク月足 ⇄ ローソク年足
+  bindToggleBtn('btn-candle', 'data-candle', [
+    { key:'m', mode:'candleM', label:'ローソク月足' },
+    { key:'y', mode:'candleY', label:'ローソク年足' }
+  ]);
+
+  // 陽線・陰線の色を入れ替える
+  (function(){
+    var btn=document.getElementById('btn-candle-color');
+    if(!btn) return;
+    loadCandleSwap();
+    function paint(){ btn.textContent = candleSwap ? '陽線 赤' : '陽線 緑'; }
+    paint();
+    btn.addEventListener('click', function(){
+      candleSwap=!candleSwap; saveCandleSwap(); paint(); render();
+    });
+  })();
   // 資産＋損益 ⇄ 資産＋増減
   bindToggleBtn('btn-both', 'data-both', [
     { key:'pnl',   mode:'both',      label:'資産＋損益' },
