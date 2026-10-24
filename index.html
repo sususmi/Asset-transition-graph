@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>資産推移アプリ</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js" integrity="sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG" crossorigin="anonymous"></script>
 <style>
   :root{
     --bg:#f6f5f1; --surface:#ffffff; --surface-2:#faf9f5;
@@ -658,7 +658,9 @@
     return '#'+[r,g,b].map(function(x){ return ('0'+x.toString(16)).slice(-2); }).join('');
   }
 
+  function safeColor(c, def){ return (typeof c==='string' && /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(c)) ? c : def; }
   function applyColors(){
+    ['accent','plus','minus','bg'].forEach(function(k){ colors[k]=safeColor(colors[k], DEFAULTS[k]); });
     ACCENT=colors.accent; PLUS=colors.plus; MINUS=colors.minus; BG=colors.bg;
     var root=document.documentElement.style;
     var dark = luminance(colors.bg) < 0.5;
@@ -2137,7 +2139,7 @@
             eCurLabel='($)';
           }
         }
-        row.innerHTML='<span class="date">'+d.date+'</span>'+
+        row.innerHTML='<span class="date">'+escAttr(d.date)+'</span>'+
           '<span class="right edit-fields">'+
           '<span class="edit-group">'+
             '<button type="button" class="sign-btn" data-target="edit-val" title="＋／−を切替">±</button>'+
@@ -2147,7 +2149,7 @@
             '<button type="button" class="sign-btn" data-target="edit-pnl" title="＋／−を切替">±</button>'+
             '<input type="number" step="any" class="edit-pnl no-spin" value="'+(ePnl==null?'':ePnl)+'" placeholder="損益'+eCurLabel+'">'+
           '</span>'+
-          '<button class="save-edit" data-date="'+d.date+'">保存</button>'+
+          '<button class="save-edit" data-date="'+escAttr(d.date)+'">保存</button>'+
           '<button class="cancel-edit">取消</button>'+
           '</span>';
         el.appendChild(row);
@@ -2169,15 +2171,15 @@
       // その月に他の記録があれば、月末の行に開閉マークを付ける
       var extra = isMonthEnd[i] ? (monthCount[mk]-1) : 0;
       var mark = extra>0
-        ? '<button class="mrow-toggle" data-month="'+mk+'" title="この月の他の記録を表示">'+
+        ? '<button class="mrow-toggle" data-month="'+escAttr(mk)+'" title="この月の他の記録を表示">'+
           (expandedMonths[mk]?'▾':'▸')+extra+'</button>'
         : '';
-      row.innerHTML='<span class="date">'+mark+d.date+'</span>'+
+      row.innerHTML='<span class="date">'+mark+escAttr(d.date)+'</span>'+
         '<span class="right">'+
         '<span class="amt">'+fmtCur(d.value, yr)+'</span>'+
         '<span class="pct" style="color:'+pctColor+'">'+pctText+'</span>'+
         '<span class="pnl" style="color:'+pColor+'">'+pText+'</span>'+
-        '<button class="edit" data-date="'+d.date+'">編集</button>'+
+        '<button class="edit" data-date="'+escAttr(d.date)+'">編集</button>'+
         '<button class="del" data-date="'+d.date+'">削除</button>'+
         '</span>';
       el.appendChild(row);
@@ -2556,11 +2558,12 @@
                     }
                     return r;
                   })
-                  .filter(function(d){ return d.date && !isNaN(d.value); });
+                  .filter(function(d){ return typeof d.date==='string' && /^\d{4}-\d{2}-\d{2}$/.test(d.date) && !isNaN(d.value); });
         data.sort(function(a,b){ return a.date<b.date?-1:1; });
         if(obj.colors){ colors=Object.assign({}, DEFAULTS, obj.colors); applyColors(); }
         if(Array.isArray(obj.partDefs)){
           partDefs=obj.partDefs.filter(function(x){ return x && x.id; });
+          partDefs.forEach(function(pd,i){ pd.color=safeColor(pd.color, PART_COLORS[i % PART_COLORS.length]); });
           saveParts(); renderPartList(); renderPartInputs();
         }
         save();
@@ -3032,8 +3035,8 @@
   function makeYoyItem(yr, amt){
     var row=document.createElement('div'); row.className='yoy-item';
     row.innerHTML=
-      '<span class="yoy-year"><input type="number" class="yoy-year-in" value="'+(yr||'')+'" placeholder="年"></span>'+
-      '<input type="number" class="yoy-amt-in" value="'+(amt==null?'':amt)+'" placeholder="基準額（円）" inputmode="numeric">'+
+      '<span class="yoy-year"><input type="number" class="yoy-year-in" value="'+escAttr(yr||'')+'" placeholder="年"></span>'+
+      '<input type="number" class="yoy-amt-in" value="'+escAttr(amt==null?'':amt)+'" placeholder="基準額（円）" inputmode="numeric">'+
       '<button class="yoy-del">削除</button>'+
       '<span class="yoy-warn" style="display:none;font-size:11px;color:var(--minus);"></span>';
     var yIn=row.querySelector('.yoy-year-in');
@@ -3471,8 +3474,8 @@
   function makeRateItem(yr, rate){
     var row=document.createElement('div'); row.className='yoy-item';
     row.innerHTML=
-      '<span class="yoy-year"><input type="number" class="yoy-year-in rate-year-in" value="'+(yr||'')+'" placeholder="年"></span>'+
-      '<input type="number" step="0.01" class="yoy-amt-in rate-amt-in" value="'+(rate==null?'':rate)+'" placeholder="ドル円（例 150.5）" inputmode="decimal">'+
+      '<span class="yoy-year"><input type="number" class="yoy-year-in rate-year-in" value="'+escAttr(yr||'')+'" placeholder="年"></span>'+
+      '<input type="number" step="0.01" class="yoy-amt-in rate-amt-in" value="'+escAttr(rate==null?'':rate)+'" placeholder="ドル円（例 150.5）" inputmode="decimal">'+
       '<button class="yoy-del">削除</button>'+
       '<span class="yoy-warn" style="display:none;font-size:11px;color:var(--minus);"></span>';
     var yIn=row.querySelector('.rate-year-in');
@@ -3555,8 +3558,8 @@
   function makeBoostItem(b){
     var row=document.createElement('div'); row.className='yoy-item boost-item';
     row.innerHTML=
-      '<input type="text" class="boost-date-in" value="'+(b.date||'')+'" placeholder="この日以下 例:240501">'+
-      '<input type="number" class="boost-amt-in" value="'+(b.amount==null?'':b.amount)+'" placeholder="上乗せ額（円）" inputmode="numeric">'+
+      '<input type="text" class="boost-date-in" value="'+escAttr(b.date||'')+'" placeholder="この日以下 例:240501">'+
+      '<input type="number" class="boost-amt-in" value="'+escAttr(b.amount==null?'':b.amount)+'" placeholder="上乗せ額（円）" inputmode="numeric">'+
       '<span class="boost-toggle-sw'+(b.on?' on':'')+'"><span class="sw-track"></span><span class="sw-label">'+(b.on?'ON':'OFF')+'</span></span>'+
       '<button class="yoy-del">削除</button>'+
       '<span class="yoy-warn" style="display:none;font-size:11px;color:var(--minus);"></span>';
@@ -3631,7 +3634,7 @@
     var row=document.createElement('div'); row.className='yoy-item ma-item';
     row.innerHTML=
       '<span class="ma-swatch" style="background:'+color+'"></span>'+
-      '<input type="number" class="ma-period-in" value="'+(ma.period==null?'':ma.period)+'" placeholder="期間" inputmode="numeric" min="2">'+
+      '<input type="number" class="ma-period-in" value="'+escAttr(ma.period==null?'':ma.period)+'" placeholder="期間" inputmode="numeric" min="2">'+
       '<span class="ma-unit">本</span>'+
       '<span class="boost-toggle-sw'+(ma.on?' on':'')+'"><span class="sw-track"></span><span class="sw-label">'+(ma.on?'ON':'OFF')+'</span></span>'+
       '<button class="yoy-del">削除</button>';
